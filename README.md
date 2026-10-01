@@ -55,7 +55,7 @@ bash FNF-Launcher-Installer.sh --uninstall    # keeps your games and saves
 ### Requirements
 
 - x86_64 Linux with **Steam** installed
-- `curl`, `tar`, `unzip`, `git`, `python3`, `7z` (Bazzite and SteamOS already have all of these)
+- `curl`, `tar`, `unzip`, `git`, `python3`, `7z` (Bazzite already has all of these)
 - Optional: `zenity` for the graphical installer, and `python3-pillow` for the Steam artwork
 
 ## Adding games
