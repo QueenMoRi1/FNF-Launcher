@@ -1,5 +1,5 @@
 extends CanvasLayer
-## Global cheat codes (autoload "Cheats"). Type "orang", "deltarune" or
+## Global cheat codes (autoload "Cheats"). Type "fafa", "deltarune" or
 ## "gooseworx" anywhere.
 
 const ORANGE := "res://assets/orang/orange.webp"
@@ -25,7 +25,7 @@ func _input(event: InputEvent) -> void:
 	if get_viewport().gui_get_focus_owner() is LineEdit:
 		return
 	typed = (typed + char(key.unicode).to_lower()).right(16)
-	if typed.ends_with("orang"):
+	if typed.ends_with("fafa"):
 		typed = ""
 		jumpscare()
 	elif typed.ends_with("deltarune"):

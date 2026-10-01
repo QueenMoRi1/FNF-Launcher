@@ -17,7 +17,7 @@ tar -C "$ROOT" \
 	--exclude=./dist \
 	--exclude=./promo \
 	-cf - . | tar -C "$STAGE/app" -xf -
-ffmpeg -loglevel error -y -i "$ROOT/assets/orang/orange.webp" -vf scale=256:256 "$STAGE/app/icon.png"
+ffmpeg -loglevel error -y -i "$ROOT/assets/orang/real_orang.png" -vf scale=256:256:flags=lanczos "$STAGE/app/icon.png"
 
 {
 	cat "$ROOT/tools/installer_header.sh"

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Builds Steam library artwork for the FNF Launcher shortcut.
 
-Usage: make_steam_art.py <fnf_images_dir> <orange.webp> <out_dir> <appid>
+Usage: make_steam_art.py <fnf_images_dir> <orange image> <out_dir> <appid>
 
 <fnf_images_dir> is FunkinCrew's preload/images folder (menuBG*.png,
 logoBumpin.*, gfDanceTitle.*, alphabet.*). Writes Steam's custom-art files:
@@ -124,7 +124,7 @@ def main():
     p.alpha_composite(vignette(p.size, 150))
     l = fit_width(lockup, 560)
     shadowed(p, l, ((600 - l.width) // 2, 24), blur=10)
-    o = fit_width(orange, 120).rotate(-12, resample=Image.BICUBIC, expand=True)
+    o = fit_width(orange, 170).rotate(-12, resample=Image.BICUBIC, expand=True)
     shadowed(p, o, (16, 900 - o.height - 16), blur=8)
     p.convert("RGB").save(os.path.join(out, f"{appid}p.png"))
 
@@ -146,7 +146,7 @@ def main():
     h.alpha_composite(shade)
     g = fit_height(gf, 640)
     shadowed(h, g, (1920 - g.width - 120, 620 - g.height + 60), blur=16)
-    o = fit_width(orange, 150).rotate(10, resample=Image.BICUBIC, expand=True)
+    o = fit_width(orange, 210).rotate(10, resample=Image.BICUBIC, expand=True)
     shadowed(h, o, (1920 - g.width - 300, 60), blur=10)
     h.alpha_composite(vignette(h.size, 110))
     h.convert("RGB").save(os.path.join(out, f"{appid}_hero.png"))

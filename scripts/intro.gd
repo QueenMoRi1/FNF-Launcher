@@ -2,7 +2,7 @@ extends Control
 ## FNF-style beat-synced intro, then straight into the launcher menu.
 
 const BEAT := 60.0 / Music.MENU_BPM
-const ORANGE := "res://assets/orang/orange.webp"
+const ORANGE := "res://assets/orang/real_orang.png"
 const LINE_HEIGHT := 70.0
 const MAX_LINE_WIDTH := 1180.0
 
@@ -30,6 +30,7 @@ func _ready() -> void:
 
 	orange = TextureRect.new()
 	orange.texture = load(ORANGE)
+	orange.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	orange.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	orange.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
 	add_child(orange)

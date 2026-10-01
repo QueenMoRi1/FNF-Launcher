@@ -398,7 +398,7 @@ step_steam() {
 		return
 	fi
 	mkdir -p "$grid"
-	python3 "$APP/tools/make_steam_art.py" "$APP/assets/funkin" "$APP/assets/orang/orange.webp" "$grid" "$appid" >/dev/null \
+	python3 "$APP/tools/make_steam_art.py" "$APP/assets/funkin" "$APP/assets/orang/real_orang.png" "$grid" "$appid" >/dev/null \
 		&& ok "Custom covers, banner and logo added (they show up after Steam restarts)." \
 		|| warn "Couldn't make the artwork."
 }

@@ -30,7 +30,7 @@ Built with Godot 4.7 for handheld and couch PCs. It was made on a ROG Ally runni
 
 ### Graphical installer (recommended)
 
-1. Download `FNF-Launcher-Installer.sh` from the [Releases](../../releases) page.
+1. Download `FNF-Launcher-Installer.sh` from [itch.io](https://queenmori1.itch.io/fnf-launcher) or the [Releases](../../releases) page.
 2. Double-click it. If your file manager opens it as text instead, right-click → Properties → enable **Is executable**, then try again.
 3. A small window gets things ready, then the FNF-styled installer opens. Choose your options and press **INSTALL**.
 
@@ -136,7 +136,7 @@ The server only accepts GameBanana links, so a friend's status can never point y
 
 Type these anywhere in the launcher:
 
-- `orang`: you'll see.
+- `fafa`: you'll see.
 - `deltarune`: opens DELTARUNE if you have it on Steam. If you don't... Kris hears about it.
 - `gooseworx`: plays *No More Tears*, then sends you back to the menu.
 
@@ -146,7 +146,7 @@ Also, don't leave the menu alone for an hour. It gets lonely.
 
 ## Development
 
-Open the folder in Godot 4.7 or run it directly:
+Clone it with `git clone https://github.com/QueenMoRi1/FNF-Launcher.git`, then open the folder in Godot 4.7 or run it directly:
 
 ```sh
 godot --path /path/to/fnf-launcher
