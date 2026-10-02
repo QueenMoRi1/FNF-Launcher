@@ -20,6 +20,8 @@ var game_running := false
 ## Set by the intro so the menu opens with a white flash.
 var intro_flash := false
 var _failures := 0
+## A one-off track from play_now() (not in the playlist), or empty.
+var special := {}
 
 
 func _ready() -> void:
@@ -30,7 +32,7 @@ func _ready() -> void:
 
 
 func current() -> Dictionary:
-	return tracks[order[pos]]
+	return special if not special.is_empty() else tracks[order[pos]]
 
 
 func play_menu_theme() -> void:
@@ -77,6 +79,20 @@ func update_songs(songs: Array) -> void:
 	else:
 		_build_order(-1)
 		_play(order[pos])
+
+
+## Plays `track` right now without adding it to the playlist; when it ends,
+## the playlist carries on with the next song.
+func play_now(track: Dictionary) -> void:
+	var stream := _load(track.path)
+	if stream == null:
+		return
+	special = track
+	player.stream = stream
+	player.play()
+	user_paused = false
+	_apply_pause()
+	track_changed.emit()
 
 
 func next() -> void:
@@ -146,6 +162,7 @@ func _build_order(first: int) -> void:
 
 
 func _play(index: int) -> void:
+	special = {}
 	var track: Dictionary = tracks[index]
 	var stream := _load(track.path)
 	if stream == null:
@@ -164,11 +181,27 @@ func _apply_pause() -> void:
 	player.stream_paused = user_paused or game_running
 
 
+## Opens a song file (on disk, res:// or inside an APK) without playing it.
+func load_stream(path: String) -> AudioStream:
+	return _load(path)
+
+
 func _load(path: String) -> AudioStream:
 	if path == "":
 		var menu := (load(MENU_THEME) as AudioStreamOggVorbis).duplicate() as AudioStreamOggVorbis
 		menu.loop = false
 		return menu
+	if path.begins_with("res://"):
+		return load(path)
+	if path.begins_with(AndroidApps.APK_SCHEME):
+		# An instrumental inside an installed APK (an APK is a zip).
+		var parts := AndroidApps.split_apk_path(path)
+		if parts.size() != 2:
+			return null
+		var bytes := AndroidApps.read_from_apk(parts[0], parts[1])
+		if bytes.is_empty():
+			return null
+		return AudioStreamOggVorbis.load_from_buffer(bytes) if parts[1].to_lower().ends_with(".ogg") else _mp3(bytes)
 	if not FileAccess.file_exists(path):
 		return null
 	match path.get_extension().to_lower():
@@ -177,3 +210,9 @@ func _load(path: String) -> AudioStream:
 		"mp3":
 			return AudioStreamMP3.load_from_file(path)
 	return null
+
+
+static func _mp3(bytes: PackedByteArray) -> AudioStream:
+	var mp3 := AudioStreamMP3.new()
+	mp3.data = bytes
+	return mp3

@@ -13,7 +13,8 @@ GODOT_VERSION="4.7.2-stable"
 GODOT_ZIP="Godot_v${GODOT_VERSION}_linux.x86_64.zip"
 GODOT_RELEASE="https://github.com/godotengine/godot/releases/download/${GODOT_VERSION}"
 GE_API="https://api.github.com/repos/GloriousEggroll/proton-ge-custom/releases/latest"
-FNF_ASSETS_REPO="https://github.com/FunkinCrew/Funkin.assets"
+FNF_ASSETS_RAW="https://raw.githubusercontent.com/FunkinCrew/Funkin.assets/main"
+SEVENZIP_API="https://api.github.com/repos/ip7z/7zip/releases/latest"
 # The FNF art/music the launcher (and its Steam artwork) borrows. Fetched from
 # FunkinCrew at install time; it isn't ours to redistribute.
 FNF_ASSET_FILES=(
@@ -35,6 +36,7 @@ FNF_ASSET_FILES=(
 )
 SLR4_APPID=4183110
 
+APP_VERSION="@VERSION@" # filled in by build_installer.sh
 SELF="$(realpath "$0")"
 SHARE="${XDG_DATA_HOME:-$HOME/.local/share}"
 DATA="$SHARE/fnf-launcher"
@@ -62,6 +64,7 @@ for arg in "$@"; do
 		--no-runtime) DO_RUNTIME=0 ;;
 		--no-steam) DO_STEAM=0 ;;
 		-h|--help) sed -n '2,9p' "$SELF" | sed 's/^# \{0,1\}//'; exit 0 ;;
+		-v|--version) echo "FNF Launcher v$APP_VERSION"; exit 0 ;;
 		*) echo "Unknown option: $arg (try --help)" >&2; exit 1 ;;
 	esac
 done
@@ -178,7 +181,7 @@ PY
 # --- Uninstall ------------------------------------------------------------------
 if [ "$MODE" = uninstall ]; then
 	say uninstall "Uninstalling FNF Launcher"
-	rm -rf "$APP" "$GODOT_DIR"
+	rm -rf "$APP" "$GODOT_DIR" "$DATA/bin"
 	rm -f "$BIN" "$DESKTOP"
 	rmdir "$DATA" 2>/dev/null || true
 	ok "Removed the app, Godot and the shortcuts."
@@ -209,11 +212,32 @@ check_system() {
 	[ "$(uname -m)" = "x86_64" ] || die "FNF Launcher needs an x86_64 (64-bit Intel/AMD) Linux PC."
 	[ "$(id -u)" != "0" ] || die "Don't run this as root (no sudo needed)."
 	local missing=() cmd
-	for cmd in curl tar unzip git python3 sha512sum 7z; do
+	for cmd in curl tar xz python3 sha512sum; do
 		command -v "$cmd" >/dev/null 2>&1 || missing+=("$cmd")
 	done
-	[ "${#missing[@]}" = 0 ] || die "Missing programs: ${missing[*]}. Bazzite/SteamOS usually have these already; otherwise install them with your package manager (7z is in the 'p7zip' / 'p7zip-full' package)."
+	[ "${#missing[@]}" = 0 ] || die "Missing programs: ${missing[*]}. SteamOS and Bazzite have these already; otherwise install them with your package manager."
 	ok "All required programs are installed."
+}
+
+## The launcher unpacks mod downloads with 7-Zip. SteamOS doesn't ship it, so
+## fetch the official standalone build (7zz) into the launcher's own folder.
+install_7zip() {
+	if command -v 7z >/dev/null 2>&1 || command -v 7za >/dev/null 2>&1 || command -v 7zz >/dev/null 2>&1 || [ -x "$DATA/bin/7zz" ]; then
+		ok "7-Zip is available."
+		return
+	fi
+	say 7zip "Downloading 7-Zip (unpacks the mods you download)"
+	local url
+	url=$(curl -fsSL "$SEVENZIP_API" | python3 -c '
+import json, sys
+print(next(a["browser_download_url"] for a in json.load(sys.stdin)["assets"] if a["name"].endswith("-linux-x64.tar.xz")))') \
+		|| die "Couldn't find the 7-Zip download."
+	download "$url" "$TMP/7zip.tar.xz" || die "Couldn't download 7-Zip."
+	mkdir -p "$TMP/7zip" "$DATA/bin"
+	tar -xJf "$TMP/7zip.tar.xz" -C "$TMP/7zip" 7zz || die "Couldn't unpack 7-Zip."
+	mv "$TMP/7zip/7zz" "$DATA/bin/7zz"
+	chmod +x "$DATA/bin/7zz"
+	ok "7-Zip installed."
 }
 
 install_app() {
@@ -243,12 +267,10 @@ fetch_assets() {
 		return
 	fi
 	say assets "Downloading the FNF menu assets from FunkinCrew"
-	git clone -q --depth 1 --filter=blob:none --sparse "$FNF_ASSETS_REPO" "$TMP/fnf-assets" \
-		|| die "Couldn't reach GitHub to download the FNF assets."
-	git -C "$TMP/fnf-assets" sparse-checkout set --no-cone "${FNF_ASSET_FILES[@]/#//}"
 	mkdir -p "$APP/assets/funkin"
 	for f in "${FNF_ASSET_FILES[@]}"; do
-		cp "$TMP/fnf-assets/$f" "$APP/assets/funkin/" || die "FNF asset missing upstream: $f"
+		curl -fsSL -o "$APP/assets/funkin/$(basename "$f")" "$FNF_ASSETS_RAW/$f" \
+			|| die "Couldn't download the FNF asset $f from GitHub."
 	done
 	ok "Got ${#FNF_ASSET_FILES[@]} FNF assets."
 }
@@ -266,7 +288,7 @@ install_godot() {
 	actual=$(sha512sum "$TMP/$GODOT_ZIP" | cut -d' ' -f1)
 	[ -n "$expected" ] && [ "$expected" = "$actual" ] || die "Godot download failed its checksum. Try again."
 	ok "Checksum verified."
-	unzip -q -o "$TMP/$GODOT_ZIP" -d "$TMP/godot"
+	python3 -m zipfile -e "$TMP/$GODOT_ZIP" "$TMP/godot" || die "Couldn't unpack Godot."
 	mkdir -p "$GODOT_DIR"
 	mv "$TMP/godot/${GODOT_ZIP%.zip}" "$GODOT"
 	chmod +x "$GODOT"
@@ -428,6 +450,7 @@ case "$MODE" in
 		install_app
 		fetch_assets
 		install_godot
+		install_7zip
 		step_proton
 		step_runtime
 		step_shortcuts
@@ -447,7 +470,7 @@ case "$MODE" in
 	gui)
 		# Plain progress window while the engine for the real installer arrives.
 		log="$TMP/bootstrap.log"
-		( check_system && install_app && fetch_assets && install_godot && import_project ) >"$log" 2>&1 </dev/null &
+		( check_system && install_app && fetch_assets && install_godot && install_7zip && import_project ) >"$log" 2>&1 </dev/null &
 		pid=$!
 		(
 			while kill -0 "$pid" 2>/dev/null; do

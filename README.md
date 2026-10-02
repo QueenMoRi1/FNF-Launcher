@@ -2,6 +2,8 @@
 
 A Friday Night Funkin' mod launcher for Linux, styled like FNF itself. Drop in Windows FNF mods (or download them from inside the launcher) and play them through GE-Proton, with a controller-friendly menu, an instrumental jukebox, Steam friends integration and Discord Rich Presence.
 
+📖 **[Read the Wiki](https://github.com/QueenMoRi1/FNF-Launcher/wiki)** for guides, customization and troubleshooting.
+
 Built with Godot 4.7 for handheld and couch PCs. It was made on a ROG Ally running Bazzite, but works on any x86_64 Linux with Steam.
 
 ## Features
@@ -16,6 +18,9 @@ Built with Godot 4.7 for handheld and couch PCs. It was made on a ROG Ally runni
   - You can rename any entry.
 - **GE-Proton launching.** Games run the same way Steam runs them: Steam Linux Runtime 4 → GE-Proton → game. Each game gets its own Wine prefix and a log file.
 - **Jukebox.** It finds the instrumentals (`Inst.ogg`) inside every installed mod and plays them shuffled, with a now-playing widget for skip, pause and time left.
+- **Chart viewer (F6 / L3).** Plays any song from your mods in full, instrumental and vocals, and scrolls its chart with every note auto-hit, over a PS3-CD-player-style visualizer.
+- **Leaderboard (F7).** Your mods ranked by total score (the best score of every song you've played), read straight from each mod's own save file, with a per-song breakdown.
+- **Achievements (F8).** 26 of them, including a secret one for every easter egg, shown as ??? with a vague hint until found. Unlocks pop up with your pick of sound: FNF, Xbox 360, Steam or PS3.
 - **Collection lists.** Export your whole library as a `.txt` of download links, then import it on another PC or share it with a friend to install everything in one go.
 - **GameBanana integration.**
   - Every game is matched to its GameBanana page automatically, and that page's art becomes the menu background. You can pick the right page by hand if the guess is wrong.
@@ -44,6 +49,10 @@ The installer:
 
 Running it again updates the launcher and keeps your games, saves and settings.
 
+### SteamOS / Steam Deck
+
+In Desktop Mode, download **`Install FNF Launcher.desktop`** and double-click it. If `FNF-Launcher-Installer.sh` is in the same folder, it runs that; otherwise it downloads the latest installer from this repo's Releases. Then switch back to Game Mode: the installer adds FNF Launcher to Steam with its artwork.
+
 ### Text installer
 
 ```sh
@@ -55,7 +64,7 @@ bash FNF-Launcher-Installer.sh --uninstall    # keeps your games and saves
 ### Requirements
 
 - x86_64 Linux with **Steam** installed
-- `curl`, `tar`, `unzip`, `git`, `python3`, `7z` (Bazzite already has all of these)
+- `curl`, `tar`, `xz`, `python3` (SteamOS and Bazzite already have these). If 7-Zip isn't installed, the installer downloads the official standalone build for the launcher to use.
 - Optional: `zenity` for the graphical installer, and `python3-pillow` for the Steam artwork
 
 ## Adding games
@@ -186,6 +195,9 @@ bash tools/build_installer.sh    # -> dist/FNF-Launcher-Installer.sh
 | `scripts/gamebanana.gd` | GameBanana search, matching and art cache |
 | `scripts/friends_service.gd`, `scripts/steam_friends.gd` | Friends page and local Steam friends parsing |
 | `scripts/music.gd` | Jukebox autoload |
+| `scripts/chart.gd`, `chart_viewer.gd`, `shaders/` | Chart reading, and the chart viewer and its visualizer |
+| `scripts/achievements.gd` | Achievements autoload: the list, unlocking, saving, the toast and the unlock sounds |
+| `scripts/scores.gd` | Reads high scores from mods' save files (Haxe-serialized `.sol`) for the leaderboard |
 | `scripts/discord.gd`, `tools/discord_rpc.py` | Discord Rich Presence bridge (Python standard library only) |
 | `scripts/cheats.gd`, `scripts/xp_popup.gd` | Easter eggs |
 | `scripts/icon_loader.gd` | `.ico` and PE (exe) icon extraction |

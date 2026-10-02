@@ -110,12 +110,14 @@ static func build(parent: Control, on_close: Callable) -> UiKit.Overlay:
 		var ok := _button(buttons, "OK", on_close)
 		ok.grab_focus.call_deferred()
 	var maybe := func() -> void:
+		Achievements.unlock("maybe")
 		text.text = "make up your mind."
 		var tw := center.create_tween()
 		for i in 8:
 			tw.tween_property(center, "position", Vector2(randf_range(-18, 18), randf_range(-6, 6)), 0.04)
 		tw.tween_property(center, "position", Vector2.ZERO, 0.04)
 	var kill := func() -> void:
+		Achievements.unlock("kill")
 		Music.player.pitch_scale = 0.9
 		on_close.call()
 

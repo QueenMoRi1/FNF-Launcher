@@ -2,10 +2,10 @@ extends Control
 ## Launcher controller: library, input, overlays and launching. The game list
 ## itself is drawn by the active skin (scripts/skins/).
 
-const SKINS := ["freeplay", "steam"]
-const SKIN_NAMES := {"freeplay": "FREEPLAY", "steam": "STEAM"}
-const KEY_HINTS := "ENTER PLAY  F2 EDIT  F3 FRIENDS  F4 DOWNLOAD  F5 RESCAN  ESC SETTINGS"
-const PAD_HINTS := "A PLAY  Y EDIT  START FRIENDS  R3 DOWNLOAD  X RESCAN  B SETTINGS"
+const SKINS := ["freeplay", "steam", "blades"]
+const SKIN_NAMES := {"freeplay": "FREEPLAY", "steam": "STEAM", "blades": "XBOX 360"}
+const KEY_HINTS := "ENTER PLAY  F2 EDIT  F3 FRIENDS  F4 DOWNLOAD  F5 RESCAN  F6 CHARTS  F7 SCORES  F8 AWARDS  ESC SETTINGS"
+const PAD_HINTS := "A PLAY  Y EDIT  START FRIENDS  R3 DOWNLOAD  X RESCAN  L3 CHARTS  B SETTINGS"
 ## Menu idle time before the XP "Where'd you go?????" popup.
 const IDLE_SECONDS := 3600.0
 
@@ -21,6 +21,7 @@ var selected := 0
 var view: SkinView
 
 var overlay: UiKit.Overlay
+var viewer: ChartViewer
 var file_dialog: FileDialog
 var input_cooldown := 0.0
 var hold_dir := 0
@@ -36,6 +37,14 @@ var friends_list: VBoxContainer
 var friends_header: Label
 var _gb_busy := false
 var _gb_again := false
+## Android build: the library is the installed FNF apps, there's no Proton,
+## downloads, friends or Discord, and the menu gets a touch action bar.
+var android := AndroidApps.is_android()
+var android_playing := false
+var _touch_start := Vector2.ZERO
+var _touch_moved := false
+var _drag := 0.0
+var _secret_taps := 0
 
 var now_playing: NowPlaying
 var proton_label: Label
@@ -48,6 +57,7 @@ var message_timer: Timer
 
 func _ready() -> void:
 	InputSetup.apply()
+	mouse_filter = MOUSE_FILTER_IGNORE # clicks on the game list reach _unhandled_input
 	add_child(gb)
 	add_child(friends)
 	add_child(downloader)
@@ -60,16 +70,19 @@ func _ready() -> void:
 	library.scan()
 	_sort_keys()
 	_apply_skin()
+	Achievements.check_library(library.games.size())
 	Music.start_playlist(library.all_songs())
 	if Music.intro_flash:
 		Music.intro_flash = false
 		_flash()
 	downloader.games_dir = library.games_dir
-	Discord.configure(library.settings.discord_enabled, library.settings.discord_client_id)
-	friends.configure(library.settings.friends_server, library.settings.friends_share)
+	if not android:
+		Discord.configure(library.settings.discord_enabled, library.settings.discord_client_id)
+		friends.configure(library.settings.friends_server, library.settings.friends_share)
 	Music.track_changed.connect(_update_presence)
 	_update_presence()
-	_show_proton_popup()
+	if not android:
+		_show_proton_popup()
 	_load_gamebanana()
 
 
@@ -88,12 +101,36 @@ func _build_chrome() -> void:
 	_update_hints()
 	Input.joy_connection_changed.connect(func(_device, _connected): _update_hints())
 
+	if android:
+		hints_label.hide()
+		var actions := HBoxContainer.new()
+		actions.add_theme_constant_override("separation", 12)
+		bar.add_child(actions)
+		actions.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+		actions.offset_left = 12
+		actions.offset_top = 4
+		actions.offset_bottom = -4
+		bar.offset_top = -64
+		for action in [["▶  PLAY", _launch_selected], ["✎  EDIT", _open_edit], ["♫  CHARTS", _open_charts], ["⚙  SETTINGS", _open_settings], ["⏯  MUSIC", Music.toggle_pause]]:
+			var b := UiKit.add_button(actions, action[0], action[1])
+			b.focus_mode = FOCUS_NONE
+			b.add_theme_font_size_override("font_size", 22)
+
 	proton_label = UiKit.add_label(bar, "", 18)
 	proton_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	proton_label.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 	proton_label.offset_right = -16
 	proton_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	proton_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+
+	var version := UiKit.add_label(self, "v" + str(ProjectSettings.get_setting("application/config/version", "")), 14, Color(1, 1, 1, 0.6))
+	version.autowrap_mode = TextServer.AUTOWRAP_OFF
+	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
+	version.set_anchors_and_offsets_preset(PRESET_BOTTOM_RIGHT)
+	version.offset_left = -120
+	version.offset_right = -12
+	version.offset_top = bar.offset_top - 24
+	version.offset_bottom = bar.offset_top - 4
 
 	message_label = UiKit.add_label(self, "", 22)
 	message_label.set_anchors_and_offsets_preset(PRESET_BOTTOM_WIDE)
@@ -166,9 +203,13 @@ func _apply_skin(keep_path := "") -> void:
 	selected = clampi(keys.find(keep_path), 0, maxi(keys.size() - 1, 0))
 	if view:
 		view.queue_free()
+	if android and library.settings.skin == "steam":
+		library.settings.skin = "freeplay" # the Steam skin is desktop-only
 	match library.settings.skin:
 		"steam":
 			view = SteamView.new()
+		"blades":
+			view = BladesView.new()
 		_:
 			view = FreeplayView.new()
 	add_child(view)
@@ -177,6 +218,7 @@ func _apply_skin(keep_path := "") -> void:
 
 	UiKit.accent = view.accent
 	theme = view.make_theme()
+	Achievements.used_skin(library.settings.skin)
 	message_label.add_theme_color_override("font_color", UiKit.accent)
 	var streams := view.sounds()
 	for s in sfx:
@@ -194,11 +236,13 @@ func _apply_skin(keep_path := "") -> void:
 		now_playing.offset_bottom = -60
 	else:
 		now_playing.set_anchors_and_offsets_preset(PRESET_TOP_RIGHT)
-		now_playing.offset_top = 16
+		now_playing.offset_top = view.widget_top
 	now_playing.offset_left = -436
 	now_playing.offset_right = -16
 
 	var hint := "Drop FNF game folders into\n%s\nthen press F5 to rescan." % library.games_dir
+	if android:
+		hint = "Install a Friday Night Funkin' app (APK),\nthen open Settings and press RESCAN APPS."
 	view.build(_items(), selected, hint)
 
 
@@ -278,7 +322,7 @@ func _load_art(path: String) -> void:
 ## True while a game is running or the launcher isn't the focused window:
 ## controllers are global, so otherwise the launcher would react to in-game input.
 func _input_blocked() -> bool:
-	return game_pid > 0 or not get_window().has_focus()
+	return game_pid > 0 or android_playing or not get_window().has_focus()
 
 
 func _input(event: InputEvent) -> void:
@@ -294,13 +338,14 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	if Cheats.active:
+	if Cheats.active or viewer:
 		return
 	if not overlay and game_pid < 0 and not launching and not is_instance_valid(file_dialog):
 		idle_time += delta
 		if idle_time >= IDLE_SECONDS:
 			idle_time = 0.0
 			_open_overlay(XpPopup.build(self, _close_overlay))
+			Achievements.unlock("idle")
 	if is_instance_valid(file_dialog):
 		return
 	if _input_blocked():
@@ -344,6 +389,7 @@ func _process(delta: float) -> void:
 		Music.prev()
 	elif Input.is_action_just_pressed("music_next"):
 		Music.next()
+		Achievements.jukebox_skipped()
 
 	if Input.is_action_just_pressed("ui_accept"):
 		_launch_selected()
@@ -355,19 +401,72 @@ func _process(delta: float) -> void:
 		_open_friends()
 	elif Input.is_action_just_pressed("download"):
 		_open_downloader()
+	elif Input.is_action_just_pressed("charts"):
+		_open_charts()
+	elif Input.is_action_just_pressed("leaderboard"):
+		_open_leaderboard()
+	elif Input.is_action_just_pressed("achievements"):
+		_open_achievements()
 	elif Input.is_action_just_pressed("ui_cancel"):
 		_open_settings()
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	var mb := event as InputEventMouseButton
-	if overlay or launching or mb == null or not mb.pressed:
+	if overlay or viewer or launching or _input_blocked():
 		return
-	match mb.button_index:
-		MOUSE_BUTTON_WHEEL_UP:
-			_change_selection(-1)
-		MOUSE_BUTTON_WHEEL_DOWN:
-			_change_selection(1)
+	var wheel := event as InputEventMouseButton
+	if wheel and wheel.pressed and wheel.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
+		_change_selection(-1 if wheel.button_index == MOUSE_BUTTON_WHEEL_UP else 1)
+		return
+	# Touch: tap a game to select it, tap it again to play, drag to scroll.
+	# (Mouse clicks do the same; touch-emulated mouse events are skipped.)
+	var touch := event as InputEventScreenTouch
+	var click := event as InputEventMouseButton
+	var swipe := event as InputEventScreenDrag
+	var mouse_drag := event as InputEventMouseMotion
+	var real_mouse := event.device != InputEvent.DEVICE_ID_EMULATION
+	var press: bool
+	var pos: Vector2
+	if touch:
+		press = touch.pressed
+		pos = touch.position
+	elif click and click.button_index == MOUSE_BUTTON_LEFT and real_mouse:
+		press = click.pressed
+		pos = click.position
+	elif swipe:
+		_on_drag(swipe.relative)
+		return
+	elif mouse_drag and real_mouse and (mouse_drag.button_mask & MOUSE_BUTTON_MASK_LEFT) != 0:
+		_on_drag(mouse_drag.relative)
+		return
+	else:
+		return
+	if press:
+		_touch_start = pos
+		_touch_moved = false
+		_drag = 0.0
+	elif not _touch_moved:
+		var i := view.item_at(pos)
+		if i < 0:
+			return
+		if i == selected:
+			_launch_selected()
+		else:
+			selected = i
+			_play("scroll")
+			view.set_selected(selected)
+
+
+func _on_drag(relative: Vector2) -> void:
+	var horizontal := view.nav_axis == SkinView.Axis.HORIZONTAL
+	_drag += relative.x if horizontal else relative.y
+	if absf(_drag) > 12.0:
+		_touch_moved = true
+	var step := 190.0 if horizontal else 110.0
+	while absf(_drag) >= step:
+		# Dragging up/left pulls the next game into place.
+		_change_selection(1 if _drag < 0 else -1)
+		_drag -= step * signf(_drag)
 
 
 func _show_message(text: String, seconds := 4.0) -> void:
@@ -378,6 +477,238 @@ func _show_message(text: String, seconds := 4.0) -> void:
 func _on_message_timeout() -> void:
 	if game_pid < 0:
 		message_label.text = ""
+
+
+# --- Chart viewer --------------------------------------------------------------
+
+## Plays every song in full with its chart, starting with the selected mod's.
+func _open_charts() -> void:
+	var songs := library.all_songs()
+	if songs.is_empty():
+		_show_message("No songs found in your mods yet.")
+		return
+	var start := 0
+	if selected < keys.size():
+		var name: String = library.games[keys[selected]].name
+		for i in songs.size():
+			if songs[i].game == name:
+				start = i
+				break
+	_play("confirm")
+	Achievements.unlock("charts")
+	viewer = ChartViewer.new().setup(songs, start)
+	viewer.closed.connect(_close_charts)
+	add_child(viewer)
+
+
+func _close_charts() -> void:
+	viewer.queue_free()
+	viewer = null
+	_play("cancel")
+	input_cooldown = 0.3
+
+
+# --- Leaderboard -----------------------------------------------------------------
+
+## Your mods ranked by total score, read from each mod's own save file.
+func _open_leaderboard() -> void:
+	if android:
+		_show_message("THE LEADERBOARD IS DESKTOP-ONLY FOR NOW")
+		return
+	var ranked := []
+	for key in keys:
+		var entry: Dictionary = library.games[key]
+		ranked.append({"entry": entry, "scores": Scores.for_game(entry)})
+	ranked.sort_custom(func(a, b): return a.scores.total > b.scores.total)
+	Achievements.unlock("leaderboard")
+	if not ranked.is_empty() and ranked[0].scores.total >= 1000000:
+		Achievements.unlock("million")
+	var o := UiKit.make_overlay(self, "LEADERBOARD", 900)
+	UiKit.add_label(o.box, "Your total score in each mod: the best score of every song you've played.", 18)
+	var list := _scroll_list(o.box)
+	var first: Button = null
+	var rank := 0
+	for r in ranked:
+		var played: bool = r.scores.total > 0
+		if played:
+			rank += 1
+		var songs: int = r.scores.songs.filter(func(s): return s.score > 0).size()
+		var info := ("%d SONG%s" % [songs, "" if songs == 1 else "S"]) if played else "NOT PLAYED YET"
+		var b := _score_row(list, ("#%d" % rank) if played else "-", r.entry.name, info,
+			_commas(r.scores.total) if played else "", _open_leaderboard_game.bind(r.entry, r.scores))
+		if first == null:
+			first = b
+	if ranked.is_empty():
+		UiKit.add_label(list, "No games yet.", 22)
+	var bottom := UiKit.add_row(o.box)
+	var close := UiKit.add_button(bottom, "CLOSE", _close_overlay)
+	o.focus_target = first if first else close
+	_open_overlay(o)
+
+
+func _open_leaderboard_game(entry: Dictionary, scores: Dictionary) -> void:
+	var o := UiKit.make_overlay(self, entry.name.to_upper(), 900)
+	UiKit.add_label(o.box, "TOTAL SCORE: " + _commas(scores.total), 26, UiKit.accent)
+	var list := _scroll_list(o.box)
+	var first: Button = null
+	var i := 0
+	for s in scores.songs:
+		if s.score <= 0:
+			continue
+		i += 1
+		var b := _score_row(list, "#%d" % i, s.title, s.difficulty.to_upper(), _commas(s.score), Callable())
+		if first == null:
+			first = b
+	if i == 0:
+		var why := "No scores saved yet. Play a song and they'll show up here." if scores.saves > 0 \
+			else "This mod hasn't saved any scores yet (or keeps them somewhere the launcher can't read)."
+		UiKit.add_label(list, why, 20)
+	var bottom := UiKit.add_row(o.box)
+	var back := UiKit.add_button(bottom, "BACK", _open_leaderboard)
+	UiKit.add_button(bottom, "CLOSE", _close_overlay)
+	o.focus_target = first if first else back
+	_open_overlay(o)
+
+
+func _scroll_list(parent: Control) -> VBoxContainer:
+	var scroll := ScrollContainer.new()
+	scroll.custom_minimum_size = Vector2(0, 400)
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	parent.add_child(scroll)
+	var list := VBoxContainer.new()
+	list.size_flags_horizontal = SIZE_EXPAND_FILL
+	list.add_theme_constant_override("separation", 6)
+	scroll.add_child(list)
+	return list
+
+
+## One leaderboard line: a focusable button with rank, name, a small note and the score.
+func _score_row(list: VBoxContainer, rank: String, title: String, note: String, score: String, on_press: Callable) -> Button:
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(0, 52)
+	if on_press.is_valid():
+		b.pressed.connect(on_press)
+	list.add_child(b)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	row.mouse_filter = MOUSE_FILTER_IGNORE
+	b.add_child(row)
+	row.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	row.offset_left = 14
+	row.offset_right = -14
+	var labels := []
+	for part in [[rank, 22, 56.0], [title, 22, 0.0], [note, 16, 0.0], [score, 24, 0.0]]:
+		var l := UiKit.add_label(row, part[0], part[1])
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+		l.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+		l.size_flags_vertical = SIZE_FILL
+		l.mouse_filter = MOUSE_FILTER_IGNORE
+		l.custom_minimum_size.x = part[2]
+		labels.append(l)
+	# Only the title gives way when space runs out; the score always shows.
+	labels[1].text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	labels[1].size_flags_horizontal = SIZE_EXPAND_FILL
+	labels[1].custom_minimum_size.x = 120
+	_paint_score_row(b, labels)
+	b.focus_entered.connect(_paint_score_row.bind(b, labels))
+	b.focus_exited.connect(_paint_score_row.bind(b, labels))
+	return b
+
+
+## Row text follows the skin's button colors (light rows in the Xbox 360 skin
+## need dark text; the highlighted row uses the focus color).
+func _paint_score_row(b: Button, labels: Array) -> void:
+	var focused := b.has_focus()
+	var text := b.get_theme_color("font_focus_color" if focused else "font_color")
+	var light_row := text.get_luminance() < 0.5 # dark text means a light button
+	var accent := UiKit.accent.darkened(0.45) if light_row else UiKit.accent
+	labels[0].add_theme_color_override("font_color", text if focused else accent)
+	labels[1].add_theme_color_override("font_color", text)
+	labels[2].add_theme_color_override("font_color", Color(text, 0.7))
+	labels[3].add_theme_color_override("font_color", text if focused else accent)
+	for l in labels:
+		if light_row:
+			l.add_theme_constant_override("outline_size", 0)
+		else:
+			l.remove_theme_constant_override("outline_size")
+
+
+static func _commas(n: int) -> String:
+	var s := str(absi(n))
+	var out := ""
+	while s.length() > 3:
+		out = "," + s.right(3) + out
+		s = s.left(s.length() - 3)
+	return ("-" if n < 0 else "") + s + out
+
+
+# --- Achievements ------------------------------------------------------------------
+
+func _open_achievements() -> void:
+	var o := UiKit.make_overlay(self, "ACHIEVEMENTS", 900)
+	UiKit.add_label(o.box, "%d / %d UNLOCKED" % [Achievements.unlocked_count(), Achievements.LIST.size()], 20, UiKit.accent)
+	var list := _scroll_list(o.box)
+	var first: Button = null
+	# Unlocked first (newest on top), then locked in list order.
+	var ids: Array = Achievements.LIST.keys()
+	var done := ids.filter(Achievements.is_unlocked)
+	done.sort_custom(func(a, b): return Achievements.data.unlocked[a] > Achievements.data.unlocked[b])
+	for id in done + ids.filter(func(i): return not Achievements.is_unlocked(i)):
+		var b := _achievement_row(list, id)
+		if first == null:
+			first = b
+	var bottom := UiKit.add_row(o.box)
+	var close := UiKit.add_button(bottom, "CLOSE", _close_overlay)
+	o.focus_target = first if first else close
+	_open_overlay(o)
+
+
+func _achievement_row(list: VBoxContainer, id: String) -> Button:
+	var info: Array = Achievements.LIST[id]
+	var got: bool = Achievements.is_unlocked(id)
+	var hidden: bool = not got and Achievements.is_secret(id)
+	var b := Button.new()
+	b.custom_minimum_size = Vector2(0, 68)
+	list.add_child(b)
+	var row := HBoxContainer.new()
+	row.add_theme_constant_override("separation", 16)
+	row.mouse_filter = MOUSE_FILTER_IGNORE
+	b.add_child(row)
+	row.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	row.offset_left = 10
+	row.offset_right = -14
+	var badge := Control.new()
+	badge.custom_minimum_size = Vector2(52, 0)
+	badge.mouse_filter = MOUSE_FILTER_IGNORE
+	badge.draw.connect(func(): Achievements.draw_trophy(badge, badge.size / 2.0, 22.0, got))
+	row.add_child(badge)
+	var col := VBoxContainer.new()
+	col.alignment = BoxContainer.ALIGNMENT_CENTER
+	col.size_flags_horizontal = SIZE_EXPAND_FILL
+	col.mouse_filter = MOUSE_FILTER_IGNORE
+	row.add_child(col)
+	var title := UiKit.add_label(col, "???" if hidden else info[0], 22)
+	var desc := UiKit.add_label(col, info[2] if hidden else info[1], 16)
+	var date_text := ""
+	if got:
+		date_text = Achievements.date_of(id)
+	elif hidden:
+		date_text = "SECRET"
+	var date := UiKit.add_label(row, date_text, 16)
+	var labels := [date, title, desc, date]
+	for l in [title, desc, date]:
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+		l.mouse_filter = MOUSE_FILTER_IGNORE
+	title.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	desc.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
+	date.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	date.size_flags_vertical = SIZE_FILL
+	_paint_score_row(b, labels)
+	b.focus_entered.connect(_paint_score_row.bind(b, labels))
+	b.focus_exited.connect(_paint_score_row.bind(b, labels))
+	if not got:
+		b.modulate = Color(1, 1, 1, 0.75)
+	return b
 
 
 # --- Overlays ----------------------------------------------------------------
@@ -417,7 +748,7 @@ func _open_edit(pending := {}) -> void:
 	if pending.is_empty():
 		pending = {"name": entry.name, "exe": entry.exe, "icon": entry.icon_override, "gb": entry.get("gb", {})}
 	var o := UiKit.make_overlay(self, "EDIT GAME", 900)
-	UiKit.add_label(o.box, path, 16, Color(0.7, 0.7, 0.7))
+	UiKit.add_label(o.box, entry.get("package", path), 16, Color(0.7, 0.7, 0.7))
 
 	UiKit.add_label(o.box, "NAME", 20, UiKit.accent)
 	var name_edit := LineEdit.new()
@@ -426,7 +757,7 @@ func _open_edit(pending := {}) -> void:
 	name_edit.text_changed.connect(func(text: String): pending.name = text)
 	o.box.add_child(name_edit)
 
-	UiKit.add_label(o.box, "EXECUTABLE", 20, UiKit.accent)
+	var exe_label := UiKit.add_label(o.box, "EXECUTABLE", 20, UiKit.accent)
 	var exe_pick := OptionButton.new()
 	var exes := Library.find_exes(path, true)
 	for exe in exes:
@@ -434,9 +765,13 @@ func _open_edit(pending := {}) -> void:
 	exe_pick.select(maxi(exes.find(pending.exe), 0))
 	exe_pick.item_selected.connect(func(i: int): pending.exe = exes[i])
 	o.box.add_child(exe_pick)
+	exe_label.visible = not android
+	exe_pick.visible = not android
 
-	UiKit.add_label(o.box, "ICON", 20, UiKit.accent)
+	var icon_label := UiKit.add_label(o.box, "ICON", 20, UiKit.accent)
 	var icon_row := UiKit.add_row(o.box)
+	icon_label.visible = not android
+	icon_row.visible = not android
 	icon_row.alignment = BoxContainer.ALIGNMENT_BEGIN
 	var preview := TextureRect.new()
 	var preview_entry := entry.duplicate()
@@ -478,6 +813,7 @@ func _open_edit(pending := {}) -> void:
 		var gb_changed: bool = entry.get("gb", {}) != pending.gb
 		entry.gb = pending.gb
 		library.save()
+		Achievements.unlock("edit")
 		icons.erase(path)
 		_play("confirm")
 		_close_overlay()
@@ -572,6 +908,9 @@ func _use_gb_link(text: String, pending: Dictionary, label: Label) -> void:
 
 
 func _open_settings() -> void:
+	if android:
+		_open_android_settings()
+		return
 	var o := UiKit.make_overlay(self, "SETTINGS", 900)
 	UiKit.add_label(o.box, "GAMES FOLDER", 20, UiKit.accent)
 	UiKit.add_label(o.box, library.games_dir, 18)
@@ -589,6 +928,25 @@ func _open_settings() -> void:
 	skin_label.custom_minimum_size = Vector2(220, 0)
 	skin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UiKit.add_button(row, " > ", _cycle_skin.bind(1))
+
+	UiKit.add_label(o.box, "ACHIEVEMENT SOUND", 20, UiKit.accent)
+	row = UiKit.add_row(o.box)
+	var sound_label := UiKit.add_label(row, "", 22)
+	var cycle_sound := func(step: int) -> void:
+		var kinds: Array = Achievements.SOUNDS
+		var kind: String = kinds[wrapi(kinds.find(Achievements.data.sound) + step, 0, kinds.size())]
+		sound_label.text = Achievements.SOUND_NAMES[kind]
+		Achievements.set_sound(kind, func(ok: bool):
+			if not ok:
+				var why := "COULDN'T FIND STEAM'S SOUND" if kind == "steam" else "COULDN'T DOWNLOAD THE %s SOUND" % Achievements.SOUND_NAMES[kind]
+				_show_message(why + ". USING THE FNF ONE FOR NOW."))
+	UiKit.add_button(row, " < ", cycle_sound.bind(-1))
+	row.move_child(sound_label, -1)
+	sound_label.text = Achievements.SOUND_NAMES.get(Achievements.data.get("sound", "fnf"), "FNF")
+	sound_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	sound_label.custom_minimum_size = Vector2(220, 0)
+	sound_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UiKit.add_button(row, " > ", cycle_sound.bind(1))
 
 	UiKit.add_label(o.box, "DISCORD RICH PRESENCE", 20, UiKit.accent)
 	row = UiKit.add_row(o.box)
@@ -625,6 +983,51 @@ func _open_settings() -> void:
 	UiKit.add_button(row, "OPEN LOGS", _open_logs)
 	UiKit.add_button(row, "CLOSE", _close_overlay)
 	UiKit.add_button(row, "QUIT", get_tree().quit)
+	_open_overlay(o)
+
+
+func _open_android_settings() -> void:
+	var o := UiKit.make_overlay(self, "SETTINGS", 820)
+	UiKit.add_label(o.box, "FNF APPS", 20, UiKit.accent)
+	UiKit.add_label(o.box, "Found %d Friday Night Funkin' app%s on this device." % [keys.size(), "" if keys.size() == 1 else "s"], 18)
+	var row := UiKit.add_row(o.box)
+	o.focus_target = UiKit.add_button(row, "RESCAN APPS", _rescan_from_settings)
+	# The orange. Tap it a few times.
+	var orange := Button.new()
+	orange.icon = load("res://assets/orang/real_orang.png")
+	orange.expand_icon = true
+	orange.flat = true
+	orange.focus_mode = FOCUS_NONE
+	orange.custom_minimum_size = Vector2(72, 72)
+	orange.pressed.connect(_on_secret_tap)
+	o.box.add_child(orange)
+	orange.size_flags_horizontal = SIZE_SHRINK_CENTER
+	row = UiKit.add_row(o.box)
+	UiKit.add_button(row, "CLOSE", _close_overlay)
+	UiKit.add_button(row, "QUIT", get_tree().quit)
+	_open_overlay(o)
+
+
+func _rescan_from_settings() -> void:
+	_close_overlay()
+	_rescan()
+
+
+func _on_secret_tap() -> void:
+	_secret_taps += 1
+	if _secret_taps < 5:
+		return
+	_secret_taps = 0
+	var o := UiKit.make_overlay(self, "???", 640)
+	var code := LineEdit.new()
+	code.placeholder_text = "type something"
+	o.box.add_child(code)
+	var run := func() -> void:
+		_close_overlay()
+		Cheats.run_code(code.text)
+	code.text_submitted.connect(func(_text: String): run.call())
+	UiKit.add_button(UiKit.add_row(o.box), "OK", run)
+	o.focus_target = code
 	_open_overlay(o)
 
 
@@ -719,6 +1122,7 @@ func _on_dialog_canceled() -> void:
 ## mod. The current selection is kept so an install doesn't interrupt browsing.
 func _rescan(installed := "", gb_info := {}, source := "") -> void:
 	library.scan()
+	Achievements.check_library(library.games.size())
 	if installed != "" and library.games.has(installed):
 		if not gb_info.is_empty():
 			library.games[installed].gb = gb_info
@@ -736,7 +1140,13 @@ func _rescan(installed := "", gb_info := {}, source := "") -> void:
 
 
 func _launch_selected() -> void:
-	if keys.is_empty():
+	if keys.is_empty() or launching:
+		return
+	if android:
+		var app: Dictionary = library.games[keys[selected]]
+		launching = true
+		_play("confirm")
+		view.play_launch(selected, _start_android_app.bind(app))
 		return
 	proton_dir = Proton.find_ge_proton()
 	if not Proton.can_launch(proton_dir):
@@ -762,10 +1172,30 @@ func _start_game(entry: Dictionary) -> void:
 		_show_message("FAILED TO START THE GAME")
 		return
 	game_pid = pid
+	Achievements.launched_game()
 	Music.set_game_running(true)
 	message_label.text = "NOW PLAYING: %s" % entry.name.to_upper()
 	run_timer.start()
 	_set_playing_presence(entry)
+
+
+func _start_android_app(entry: Dictionary) -> void:
+	launching = false
+	if not AndroidApps.launch(entry.package):
+		_show_message("COULDN'T START " + entry.name.to_upper())
+		return
+	android_playing = true
+	Music.set_game_running(true)
+	message_label.text = "NOW PLAYING: %s" % entry.name.to_upper()
+
+
+## Android: coming back to the launcher after playing a game.
+func _notification(what: int) -> void:
+	if what == NOTIFICATION_APPLICATION_RESUMED and android_playing:
+		android_playing = false
+		Music.set_game_running(false)
+		message_label.text = ""
+		input_cooldown = 0.5
 
 
 func _check_game() -> void:
@@ -817,6 +1247,9 @@ func _set_playing_presence(entry: Dictionary) -> void:
 ## Downloads overlay: add links to the queue and watch progress. Closing it
 ## doesn't stop anything.
 func _open_downloader(url := "") -> void:
+	if android:
+		_show_message("DOWNLOADS ARE DESKTOP-ONLY FOR NOW")
+		return
 	var o := UiKit.make_overlay(self, "DOWNLOADS", 960)
 	UiKit.add_label(o.box, "Paste a GameBanana mod page or a direct .zip / .7z / .rar link. Downloads keep going after you close this.", 17)
 	var row := UiKit.add_row(o.box)
@@ -940,6 +1373,7 @@ func _job_status(job: Dictionary) -> String:
 
 func _on_game_installed(game_path: String, gb_info: Dictionary, source: String) -> void:
 	_play("confirm")
+	Achievements.unlock("download")
 	_rescan(game_path, gb_info, source)
 	_show_message("INSTALLED " + game_path.get_file().to_upper(), 6.0)
 
@@ -956,6 +1390,7 @@ func _export_collection(path: String) -> void:
 	var linked := library.games.values().filter(func(e): return Library.download_link(e) != "").size()
 	_play("confirm")
 	_show_message("SAVED %d OF %d GAMES TO %s" % [linked, library.games.size(), path.get_file().to_upper()], 6.0)
+	Achievements.unlock("share")
 
 
 ## Queues every link in a collection list, skipping games already installed.
@@ -992,6 +1427,9 @@ func _on_download_failed(job_name: String, message: String) -> void:
 # --- Friends -----------------------------------------------------------------
 
 func _open_friends() -> void:
+	if android:
+		_show_message("FRIENDS ARE DESKTOP-ONLY FOR NOW")
+		return
 	var o := UiKit.make_overlay(self, "FRIENDS", 900)
 	friends_header = UiKit.add_label(o.box, "", 18)
 	var scroll := ScrollContainer.new()
@@ -1004,6 +1442,9 @@ func _open_friends() -> void:
 	scroll.add_child(friends_list)
 	var bottom := UiKit.add_row(o.box)
 	o.focus_target = UiKit.add_button(bottom, "CLOSE", _close_overlay)
+	UiKit.add_button(bottom, "LEADERBOARD", _open_leaderboard)
+	UiKit.add_button(bottom, "ACHIEVEMENTS", _open_achievements)
+	Achievements.unlock("friends")
 	_open_overlay(o)
 	friends.fast = true
 	_fill_friends()

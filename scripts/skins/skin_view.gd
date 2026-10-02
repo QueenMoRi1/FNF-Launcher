@@ -11,6 +11,8 @@ enum Axis { VERTICAL, HORIZONTAL }
 var nav_axis := Axis.VERTICAL
 ## Put the jukebox widget at the bottom-right instead of the top-right.
 var widget_at_bottom := false
+## Distance of the jukebox widget from the top edge (when it's at the top).
+var widget_top := 16.0
 ## Title/label highlight color for overlays in this skin.
 var accent := UiKit.YELLOW
 var items: Array = []
@@ -25,6 +27,7 @@ func build(new_items: Array, new_selected: int, empty_hint: String) -> void:
 	items = new_items
 	selected = new_selected
 	_build(empty_hint)
+	_ignore_mouse(self)
 	set_selected(selected, true)
 
 
@@ -38,6 +41,19 @@ func set_art(i: int, tex: Texture2D) -> void:
 		items[i].art = tex
 		if i == selected:
 			set_selected(selected, true)
+
+
+## Skins only draw; clicks and taps go to main.gd (which asks item_at()).
+static func _ignore_mouse(node: Node) -> void:
+	for child in node.get_children():
+		if child is Control:
+			child.mouse_filter = MOUSE_FILTER_IGNORE
+		_ignore_mouse(child)
+
+
+## Index of the game drawn at `pos` (screen coordinates), or -1. Used for taps.
+func item_at(_pos: Vector2) -> int:
+	return -1
 
 
 ## Skin-specific launch animation; must call `done` when finished.

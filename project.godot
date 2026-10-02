@@ -5,6 +5,7 @@ config_version=5
 [application]
 
 config/name="FNF Launcher"
+config/version="1.4.0"
 run/main_scene="res://scenes/intro.tscn"
 config/features=PackedStringArray("4.7", "GL Compatibility")
 
@@ -13,6 +14,7 @@ config/features=PackedStringArray("4.7", "GL Compatibility")
 Music="*res://scripts/music.gd"
 Cheats="*res://scripts/cheats.gd"
 Discord="*res://scripts/discord.gd"
+Achievements="*res://scripts/achievements.gd"
 
 [display]
 
@@ -20,8 +22,15 @@ window/size/viewport_width=1280
 window/size/viewport_height=720
 window/stretch/mode="canvas_items"
 window/stretch/aspect="expand"
+window/handheld/orientation=4
 
 [rendering]
 
+textures/vram_compression/import_etc2_astc=true
+
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+
+[network]
+
+tls/certificate_bundle_override="res://assets/ca-certificates.crt"

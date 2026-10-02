@@ -48,6 +48,11 @@ func save() -> void:
 
 ## Rescans games_dir. Keeps names/overrides for folders that still exist.
 func scan() -> void:
+	if AndroidApps.is_android():
+		# On Android the "library" is the FNF apps installed on the device.
+		games = AndroidApps.scan(games)
+		save()
+		return
 	DirAccess.make_dir_recursive_absolute(games_dir)
 	var found := {}
 	var dir := DirAccess.open(games_dir)
@@ -124,7 +129,8 @@ func all_songs() -> Array:
 	for path in games:
 		var entry: Dictionary = games[path]
 		for song in entry.get("songs", []):
-			var key := "%s|%d" % [song.title.to_lower(), _file_size(song.path)]
+			var size: int = -1 if song.path.begins_with(AndroidApps.APK_SCHEME) else _file_size(song.path)
+			var key := "%s|%s" % [song.title.to_lower(), size if size >= 0 else song.path]
 			if seen.has(key):
 				continue
 			seen[key] = true

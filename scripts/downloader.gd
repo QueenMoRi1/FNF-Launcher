@@ -216,14 +216,29 @@ func _extract(job: Dictionary) -> void:
 	job.message = "Unpacking..."
 	job.tmp = _downloads_dir().path_join("extract_%d" % job.id)
 	DirAccess.make_dir_recursive_absolute(job.tmp)
+	var seven_zip := find_7zip()
+	if seven_zip == "":
+		_fail(job, "7-Zip isn't installed, so downloads can't be unpacked. Run the FNF Launcher installer again to get it.")
+		return
 	_thread = Thread.new()
-	_thread.start(_unpack.bind(job.archive, job.tmp, kind))
+	_thread.start(_unpack.bind(seven_zip, job.archive, job.tmp, kind))
 	_emit_changed(true)
 
 
+## 7-Zip on the system, or the standalone copy the installer puts in the
+## launcher's data folder (SteamOS doesn't ship 7-Zip).
+static func find_7zip() -> String:
+	for dir in OS.get_environment("PATH").split(":", false):
+		for exe in ["7z", "7za", "7zz"]:
+			if FileAccess.file_exists(dir.path_join(exe)):
+				return dir.path_join(exe)
+	var bundled := Library.prefixes_dir().get_base_dir().path_join("bin/7zz")
+	return bundled if FileAccess.file_exists(bundled) else ""
+
+
 ## Runs on a worker thread so the UI keeps animating.
-static func _unpack(archive: String, dest: String, kind: String) -> int:
-	var code := OS.execute("7z", ["x", "-y", "-o" + dest, archive])
+static func _unpack(seven_zip: String, archive: String, dest: String, kind: String) -> int:
+	var code := OS.execute(seven_zip, ["x", "-y", "-o" + dest, archive])
 	if code != 0 and kind == "rar":
 		code = OS.execute("unrar", ["x", "-o+", "-y", archive, dest + "/"])
 	return code

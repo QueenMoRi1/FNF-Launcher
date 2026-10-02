@@ -1,0 +1,8 @@
+.godot/
+# Borrowed from FunkinCrew/funkin - art/music are not freely redistributable
+assets/funkin/
+dist/
+# Showcase-recording script and its demo-only images
+_demo/
+override.cfg
+__pycache__/

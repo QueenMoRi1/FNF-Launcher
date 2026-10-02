@@ -18,6 +18,18 @@ static func apply() -> void:
 	_add("rescan", KEY_F5, JOY_BUTTON_X)
 	_add("friends", KEY_F3, JOY_BUTTON_START)
 	_add("download", KEY_F4, JOY_BUTTON_RIGHT_STICK)
+	_add("charts", KEY_F6, JOY_BUTTON_LEFT_STICK)
+	# No controller button left: on a pad it's in the friends page (Start).
+	if not InputMap.has_action("leaderboard"):
+		InputMap.add_action("leaderboard")
+	var f7 := InputEventKey.new()
+	f7.physical_keycode = KEY_F7
+	InputMap.action_add_event("leaderboard", f7)
+	if not InputMap.has_action("achievements"):
+		InputMap.add_action("achievements")
+	var f8 := InputEventKey.new()
+	f8.physical_keycode = KEY_F8
+	InputMap.action_add_event("achievements", f8)
 	_add("music_pause", KEY_SPACE, JOY_BUTTON_BACK)
 	_add("music_prev", KEY_Q, JOY_BUTTON_LEFT_SHOULDER)
 	_add("music_next", KEY_W, JOY_BUTTON_RIGHT_SHOULDER)

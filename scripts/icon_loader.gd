@@ -13,6 +13,8 @@ static func load_icon(folder: String, entry: Dictionary) -> Image:
 	var img: Image = null
 	if entry.get("icon_override", "") != "":
 		img = load_image_file(entry.icon_override)
+	if img == null and entry.get("apk", "") != "":
+		img = AndroidApps.load_icon(entry) # an installed Android app
 	if img == null:
 		img = _from_folder(folder)
 	if img == null and entry.get("exe", "") != "":

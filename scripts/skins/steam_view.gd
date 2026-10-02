@@ -33,7 +33,7 @@ var proton_name := ""
 func _init() -> void:
 	super()
 	nav_axis = Axis.HORIZONTAL
-	widget_at_bottom = true
+	widget_top = 72.0 # under the clock, clear of the capsule row
 	accent = BLUE
 
 
@@ -146,6 +146,13 @@ func set_selected(i: int, instant := false) -> void:
 			create_tween().tween_property(hero, "modulate:a", 1.0, 0.3)
 	for c in capsules.size():
 		_update_capsule_art(c)
+
+
+func item_at(pos: Vector2) -> int:
+	for c in capsules.size():
+		if capsules[c].get_global_rect().has_point(pos):
+			return c
+	return -1
 
 
 func play_launch(_i: int, done: Callable) -> void:

@@ -74,6 +74,13 @@ func set_selected(i: int, instant := false) -> void:
 	create_tween().tween_property(art, "modulate:a", target, 0.0 if instant and not tex else 0.35)
 
 
+func item_at(pos: Vector2) -> int:
+	for i in rows.size():
+		if rows[i].get_global_rect().has_point(pos):
+			return i
+	return -1
+
+
 func play_launch(i: int, done: Callable) -> void:
 	var row := rows[i]
 	var tw := create_tween()

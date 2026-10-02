@@ -40,7 +40,7 @@ func _init() -> void:
 	time_label.size_flags_horizontal = SIZE_EXPAND_FILL
 	_button(row, "<<", Music.prev)
 	pause_button = _button(row, "||", Music.toggle_pause)
-	_button(row, ">>", Music.next)
+	_button(row, ">>", func(): Music.next(); Achievements.jukebox_skipped())
 	shuffle_button = _button(row, "SHUF", func(): Music.set_shuffle(not Music.shuffle))
 
 

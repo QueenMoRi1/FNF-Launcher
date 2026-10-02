@@ -1,6 +1,6 @@
 extends CanvasLayer
-## Global cheat codes (autoload "Cheats"). Type "fafa", "deltarune" or
-## "gooseworx" anywhere.
+## Global cheat codes (autoload "Cheats"). Type "fafa", "deltarune",
+## "gooseworx", "jim" or "compost" anywhere. "JIM" in caps plays the video.
 
 const ORANGE := "res://assets/orang/orange.webp"
 const BOOM := "res://assets/orang/vine_boom.mp3"
@@ -8,8 +8,13 @@ const BLIP := "res://assets/funkin/scrollMenu.ogg"
 const FONT := "res://assets/funkin/vcr.ttf"
 const DELTARUNE_APPID := "1671210"
 const NO_MORE_TEARS := "res://assets/orang/no_more_tears.ogv"
+const COMPOST_VIDEO := "res://assets/compost/compost.ogv"
+const JIM_VIDEO := "res://assets/jim/jim.ogv"
+const JIM := {"title": "I'm Jim and I Live in the Bin", "game": "Caddicarus", "path": "res://assets/jim/jim.ogg"}
 
 var typed := ""
+## What was typed with its original capitals (typed is lowercased).
+var typed_raw := ""
 var active := false
 
 
@@ -24,22 +29,56 @@ func _input(event: InputEvent) -> void:
 		return
 	if get_viewport().gui_get_focus_owner() is LineEdit:
 		return
-	typed = (typed + char(key.unicode).to_lower()).right(16)
+	typed_raw = (typed_raw + char(key.unicode)).right(32) # long enough for the longest code
+	typed = typed_raw.to_lower()
 	if typed.ends_with("fafa"):
+		typed_raw = ""
 		typed = ""
 		jumpscare()
 	elif typed.ends_with("deltarune"):
+		typed_raw = ""
 		typed = ""
 		deltarune()
 	elif typed.ends_with("gooseworx"):
+		typed_raw = ""
 		typed = ""
 		gooseworx()
+	elif typed.ends_with("yearofthelinuxdesktop"):
+		typed_raw = ""
+		typed = ""
+		Achievements.unlock("cope")
+	elif typed.ends_with("compost"):
+		typed_raw = ""
+		typed = ""
+		compost()
+	elif typed.ends_with("jim"):
+		jim(typed_raw.ends_with("JIM"))
+		typed_raw = ""
+		typed = ""
+
+
+## Runs a code typed into a text box (Android has no keyboard to type them blind).
+func run_code(text: String) -> void:
+	match text.strip_edges().to_lower():
+		"fafa":
+			jumpscare()
+		"deltarune":
+			deltarune()
+		"gooseworx":
+			gooseworx()
+		"compost":
+			compost()
+		"yearofthelinuxdesktop":
+			Achievements.unlock("cope")
+		"jim":
+			jim(text.strip_edges() == "JIM")
 
 
 func jumpscare() -> void:
 	if active:
 		return
 	active = true
+	Achievements.unlock("fafa")
 	var screen := get_viewport().get_visible_rect().size
 
 	var root := Control.new()
@@ -89,6 +128,7 @@ func _end(root: Control) -> void:
 func deltarune() -> void:
 	if active:
 		return
+	Achievements.unlock("deltarune")
 	if deltarune_installed():
 		_textbox("* You opened DELTARUNE.", false)
 		get_tree().create_timer(1.2).timeout.connect(OS.shell_open.bind("steam://rungameid/" + DELTARUNE_APPID))
@@ -159,8 +199,36 @@ func _type_char(label: Label, blip: AudioStreamPlayer, i: int) -> void:
 		blip.play()
 
 
+## Jim lives in the bin. He's on the jukebox now; SHOUT it and you get the video.
+func jim(loud := false) -> void:
+	if active:
+		return
+	Achievements.unlock("jim")
+	if loud:
+		Achievements.unlock("jim_loud")
+		_play_video(JIM_VIDEO)
+	else:
+		Music.play_now(JIM)
+
+
+## Hi, I'm Compost.
+func compost() -> void:
+	if active:
+		return
+	Achievements.unlock("compost")
+	_play_video(COMPOST_VIDEO)
+
+
 ## Plays No More Tears full-screen, then drops you back where you were.
 func gooseworx() -> void:
+	if active:
+		return
+	Achievements.unlock("gooseworx")
+	_play_video(NO_MORE_TEARS)
+
+
+## Plays a video full-screen with the music paused, then fades back.
+func _play_video(path: String) -> void:
 	if active:
 		return
 	active = true
@@ -174,7 +242,7 @@ func gooseworx() -> void:
 	root.add_child(frame)
 	frame.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
 	var video := VideoStreamPlayer.new()
-	video.stream = load(NO_MORE_TEARS)
+	video.stream = load(path)
 	video.expand = true
 	frame.add_child(video)
 	video.finished.connect(_end_video.bind(root))

@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=Install FNF Launcher
+Comment=Installs or updates FNF Launcher (Friday Night Funkin' mod launcher)
+Icon=applications-games
+Exec=bash -c "here=\\$(dirname \\"\\$1\\"); inst=\\"\\$here/FNF-Launcher-Installer.sh\\"; if [ -z \\"\\$1\\" ] || [ ! -f \\"\\$inst\\" ]; then inst=\\$(mktemp --suffix=.sh); if ! curl -fL -o \\"\\$inst\\" \\"https://github.com/QueenMoRi1/FNF-Launcher/releases/latest/download/FNF-Launcher-Installer.sh\\"; then msg=\\"Couldn't download the FNF Launcher installer. Check your internet connection, or put FNF-Launcher-Installer.sh next to this file and try again.\\"; zenity --error --title=\\"FNF Launcher\\" --text=\\"\\$msg\\" 2>/dev/null || kdialog --error \\"\\$msg\\" 2>/dev/null; exit 1; fi; fi; if command -v zenity >/dev/null 2>&1; then exec bash \\"\\$inst\\"; else exec konsole -e bash \\"\\$inst\\" --cli; fi" _ %k
+Terminal=false
+Categories=Game;
