@@ -20,7 +20,8 @@ Built with Godot 4.7 for handheld and couch PCs. It was made on a ROG Ally runni
 - **Jukebox.** It finds the instrumentals (`Inst.ogg`) inside every installed mod and plays them shuffled, with a now-playing widget for skip, pause and time left.
 - **Chart viewer (F6 / L3).** Plays any song from your mods in full, instrumental and vocals, and scrolls its chart with every note auto-hit, over a PS3-CD-player-style visualizer.
 - **Leaderboard (F7).** Your mods ranked by total score (the best score of every song you've played), read straight from each mod's own save file, with a per-song breakdown.
-- **Achievements (F8).** 26 of them, including a secret one for every easter egg, shown as ??? with a vague hint until found. Unlocks pop up with your pick of sound: FNF, Xbox 360, Steam or PS3.
+- **Update notifier.** Pick newest features first (the launcher builds the newest GitHub code for you) or stable releases only (the same build as itch.io), and it tells you when there's something new.
+- **Achievements (F8).** 27 of them, including a secret one for every easter egg, shown as ??? with a vague hint until found. Unlocks pop up with your pick of sound: FNF, Xbox 360, Steam or PS3.
 - **Collection lists.** Export your whole library as a `.txt` of download links, then import it on another PC or share it with a friend to install everything in one go.
 - **GameBanana integration.**
   - Every game is matched to its GameBanana page automatically, and that page's art becomes the menu background. You can pick the right page by hand if the guess is wrong.

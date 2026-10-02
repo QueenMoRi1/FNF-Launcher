@@ -22,7 +22,14 @@ tar -C "$ROOT" \
 	--exclude=./export_presets.cfg \
 	--exclude=./tools/build_android.sh \
 	-cf - . | tar -C "$STAGE/app" -xf -
-ffmpeg -loglevel error -y -i "$ROOT/assets/orang/real_orang.png" -vf scale=256:256:flags=lanczos "$STAGE/app/icon.png"
+# The app icon: the orang at 256px (ffmpeg or Pillow if there, else full size).
+if command -v ffmpeg >/dev/null 2>&1; then
+	ffmpeg -loglevel error -y -i "$ROOT/assets/orang/real_orang.png" -vf scale=256:256:flags=lanczos "$STAGE/app/icon.png"
+elif python3 -c "import PIL" 2>/dev/null; then
+	python3 -c "from PIL import Image; import sys; Image.open(sys.argv[1]).resize((256, 256)).save(sys.argv[2])" "$ROOT/assets/orang/real_orang.png" "$STAGE/app/icon.png"
+else
+	cp "$ROOT/assets/orang/real_orang.png" "$STAGE/app/icon.png"
+fi
 
 {
 	sed "s/@VERSION@/$(bash "$ROOT/tools/version.sh")/" "$ROOT/tools/installer_header.sh"

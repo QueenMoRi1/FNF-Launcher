@@ -1,8 +1,53 @@
 # Changelog
 
-Versions are MAJOR.MINOR.PATCH: MAJOR for big or breaking changes, MINOR for new
-features, PATCH for bug fixes only. Bump with `bash tools/version.sh minor` (or patch/major),
-add a section here, then run `bash tools/release.sh`.
+Versions are GREATER.LESSER.SMALL:
+- GREATER: big or breaking changes
+- LESSER: a new feature update
+- SMALL: smaller additions and fixes on top of a feature update
+
+Only GREATER.LESSER versions (X.Y.0) get builds: an installer on GitHub Releases
+and itch.io. SMALL versions are GitHub-only (a commit and a tag). People on the
+GitHub update channel get them, and stable-channel users get them in the next build.
+
+Bump with `bash tools/version.sh small` (or lesser / greater), add a section
+here, then run `bash tools/release.sh`.
+
+## v1.4.1 (2026-10-01)
+
+Secret chart viewer play mode, an update notifier, and fixes.
+
+Chart viewer
+- Secret play mode: hold M for 5 seconds in the chart viewer. The song
+  restarts with FNF's 3, 2, 1, GO countdown (sounds and Ready/Set/Go images),
+  shows the D F J K keys, and you play BF's side:
+  - Psych Engine timing windows (sick/good/bad/shit/miss) and ghost tapping
+  - score, misses, accuracy and combo
+  - a results card with a rank at the end
+  Scoring lives in scripts/play_mode.gd. The countdown assets are FunkinCrew's
+  and are fetched by the installer like the other FNF assets.
+- The chart viewer's arrow drawing (ChartViewer.draw_arrow) and the
+  broken-difficulty fallback (Chart.load_readable) are now shared helpers.
+
+Achievements
+- New secret achievement "Off the Clock" for the play mode (27 in total,
+  11 of them secret).
+
+Update notifier (new)
+- On first launch the launcher asks how you want updates. You can change
+  it later in Settings → UPDATES, with CHECK NOW:
+  - GitHub (newest first): any new commit on main; updating downloads the
+    code, builds an installer on the spot, and installs it
+  - Itch (stable): only new released versions (GitHub Releases, the same
+    build as itch.io); updating installs that release's installer, or opens
+    the itch page
+  - Off
+- It checks once per launch and shows what's new. Updating runs in the
+  background (tools/update.sh, scripts/updater.gd) and keeps games, saves
+  and settings, then offers to restart.
+- The settings popup now scrolls, so it fits any screen.
+- build_installer.sh no longer needs ffmpeg (it falls back to Pillow, or
+  copies the icon as is), so on-the-spot builds work on SteamOS.
+
 
 ## v1.4.0 (2026-10-01)
 

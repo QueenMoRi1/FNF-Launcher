@@ -4,9 +4,9 @@
 # folder, the commit message) reads it from there.
 #
 #   bash tools/version.sh              show the version
-#   bash tools/version.sh patch        1.4.1 -> 1.4.2   bug fixes only
-#   bash tools/version.sh minor        1.4.1 -> 1.5.0   new features
-#   bash tools/version.sh major        1.4.1 -> 2.0.0   big changes / breaks things
+#   bash tools/version.sh small        1.4.1 -> 1.4.2   smaller additions and fixes
+#   bash tools/version.sh lesser       1.4.1 -> 1.5.0   a new feature update
+#   bash tools/version.sh greater      1.4.1 -> 2.0.0   big or breaking changes
 #   bash tools/version.sh set 1.5.0    set it exactly
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -16,9 +16,9 @@ current=$(sed -n 's/^config\/version="\(.*\)"$/\1/p' "$FILE")
 IFS=. read -r major minor patch <<<"$current"
 case "${1:-}" in
 	"") echo "$current"; exit 0 ;;
-	patch) patch=$((patch + 1)) ;;
-	minor) minor=$((minor + 1)); patch=0 ;;
-	major) major=$((major + 1)); minor=0; patch=0 ;;
+	small | patch) patch=$((patch + 1)) ;;
+	lesser | minor) minor=$((minor + 1)); patch=0 ;;
+	greater | major) major=$((major + 1)); minor=0; patch=0 ;;
 	set) [[ "${2:-}" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || { echo "Use: set X.Y.Z" >&2; exit 1; }
 		IFS=. read -r major minor patch <<<"$2" ;;
 	*) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 1 ;;

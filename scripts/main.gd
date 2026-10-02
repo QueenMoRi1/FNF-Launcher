@@ -22,6 +22,11 @@ var view: SkinView
 
 var overlay: UiKit.Overlay
 var viewer: ChartViewer
+var updater: Updater
+var _update_startup := true # still waiting to ask / check at startup
+var _update_manual := false # the check came from CHECK NOW
+var _updating := false
+var _update_sha := ""
 var file_dialog: FileDialog
 var input_cooldown := 0.0
 var hold_dir := 0
@@ -83,6 +88,7 @@ func _ready() -> void:
 	_update_presence()
 	if not android:
 		_show_proton_popup()
+		_setup_updater()
 	_load_gamebanana()
 
 
@@ -360,7 +366,7 @@ func _process(delta: float) -> void:
 		input_cooldown -= delta
 		return
 	if overlay:
-		if Input.is_action_just_pressed("ui_cancel"):
+		if Input.is_action_just_pressed("ui_cancel") and not _updating:
 			_play("cancel")
 			_close_overlay()
 		return
@@ -506,6 +512,136 @@ func _close_charts() -> void:
 	viewer = null
 	_play("cancel")
 	input_cooldown = 0.3
+
+
+# --- Updates -------------------------------------------------------------------------
+
+func _setup_updater() -> void:
+	updater = Updater.new()
+	add_child(updater)
+	updater.checked.connect(_on_update_checked)
+	updater.update_finished.connect(_on_update_finished)
+	# Ask (first launch) or check once the startup popups are out of the way.
+	var t := Timer.new()
+	t.wait_time = 1.5
+	t.timeout.connect(_update_tick.bind(t))
+	add_child(t)
+	t.start()
+
+
+func _update_tick(t: Timer) -> void:
+	if overlay or viewer or launching or game_pid > 0 or is_instance_valid(file_dialog):
+		return
+	t.queue_free()
+	var channel: String = library.settings.get("update_channel", "")
+	if channel == "":
+		_open_update_prompt()
+	elif channel != "off":
+		updater.check(channel, library.settings.get("update_sha", ""))
+
+
+func _open_update_prompt() -> void:
+	var o := UiKit.make_overlay(self, "STAY UP TO DATE?", 860)
+	UiKit.add_label(o.box, "FNF Launcher can tell you when there's a new version. How do you want your updates?", 20)
+	var first: Button = null
+	for choice in [
+		["github", "GITHUB: NEWEST FEATURES FIRST", "Every new change as soon as it's on GitHub. The launcher builds it for you on the spot. Might be a little rough around the edges."],
+		["release", "ITCH: STABLE RELEASES ONLY", "Only when a new version is released: the same one that goes on itch.io."],
+		["off", "DON'T CHECK", "No update checks. You can change this any time in Settings."]]:
+		var b := UiKit.add_button(o.box, choice[1], _set_update_channel.bind(choice[0], true))
+		UiKit.add_label(o.box, choice[2], 16, Color(0.75, 0.75, 0.75))
+		if first == null:
+			first = b
+	o.focus_target = first
+	_open_overlay(o)
+
+
+func _set_update_channel(channel: String, check_now: bool) -> void:
+	library.settings.update_channel = channel
+	library.save()
+	if check_now:
+		_close_overlay()
+		if channel != "off":
+			updater.check(channel, library.settings.update_sha)
+
+
+func _check_updates_now() -> void:
+	var channel: String = library.settings.get("update_channel", "")
+	if channel in ["", "off"]:
+		_show_message("UPDATES ARE OFF. PICK A CHANNEL FIRST.")
+		return
+	_update_manual = true
+	_show_message("CHECKING FOR UPDATES...")
+	updater.check(channel, library.settings.update_sha)
+
+
+func _on_update_checked(r: Dictionary) -> void:
+	var manual := _update_manual
+	_update_manual = false
+	# Installed from a release with nothing newer on GitHub: start counting from here.
+	if r.channel == "github" and r.sha != "" and not r.available and library.settings.update_sha == "":
+		library.settings.update_sha = r.sha
+		library.save()
+	if r.available:
+		if overlay == null or manual:
+			_open_update_available(r)
+	elif manual:
+		_show_message(("CAN'T CHECK FOR UPDATES: " + r.error.to_upper()) if r.error != "" else "YOU'RE UP TO DATE (v%s)" % Updater.current_version())
+
+
+func _open_update_available(r: Dictionary) -> void:
+	var o := UiKit.make_overlay(self, "UPDATE AVAILABLE", 860)
+	UiKit.add_label(o.box, r.title, 28, UiKit.accent).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UiKit.add_label(o.box, "You have v%s." % Updater.current_version(), 18, Color(0.75, 0.75, 0.75)).horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	if r.detail != "":
+		UiKit.add_label(o.box, r.detail, 18)
+	UiKit.add_label(o.box, "Your games, saves and settings are kept.", 16, Color(0.75, 0.75, 0.75))
+	var row := UiKit.add_row(o.box)
+	o.focus_target = UiKit.add_button(row, "UPDATE NOW", _start_update.bind(r))
+	if r.channel == "release":
+		UiKit.add_button(row, "OPEN ITCH PAGE", func(): OS.shell_open(Updater.ITCH_PAGE))
+	UiKit.add_button(row, "LATER", _close_overlay)
+	_open_overlay(o)
+
+
+func _start_update(r: Dictionary) -> void:
+	_updating = true
+	_update_sha = r.sha
+	var o := UiKit.make_overlay(self, "UPDATING...", 760)
+	var what := "Downloading the newest code and building it." if r.channel == "github" else "Downloading and installing the new version."
+	UiKit.add_label(o.box, what + " This takes a minute or two.\n\nYour games, saves and settings are safe. Don't close the launcher.", 20)
+	_open_overlay(o)
+	updater.run_update(r.channel)
+
+
+func _on_update_finished(ok: bool, log_path: String) -> void:
+	_updating = false
+	if ok and library.settings.update_channel == "github" and _update_sha != "":
+		library.settings.update_sha = _update_sha
+		library.save()
+	var o := UiKit.make_overlay(self, "UPDATED!" if ok else "UPDATE FAILED", 760)
+	var row: HBoxContainer
+	if ok:
+		UiKit.add_label(o.box, "The new version is installed. Restart the launcher to use it.", 20)
+		row = UiKit.add_row(o.box)
+		o.focus_target = UiKit.add_button(row, "RESTART NOW", _restart_launcher)
+		UiKit.add_button(row, "LATER", _close_overlay)
+	else:
+		UiKit.add_label(o.box, "Something went wrong, so nothing was changed: your launcher still works.\nThe details are in " + log_path, 20)
+		row = UiKit.add_row(o.box)
+		o.focus_target = UiKit.add_button(row, "CLOSE", _close_overlay)
+		UiKit.add_button(row, "OPEN LOG", func(): OS.shell_open(log_path))
+	_open_overlay(o)
+
+
+func _restart_launcher() -> void:
+	var bin := OS.get_environment("HOME").path_join(".local/bin/fnf-launcher")
+	if not FileAccess.file_exists(bin):
+		_show_message("CLOSE AND REOPEN THE LAUNCHER TO FINISH UPDATING")
+		_close_overlay()
+		return
+	OS.create_process(bin, [])
+	get_tree().quit()
 
 
 # --- Leaderboard -----------------------------------------------------------------
@@ -912,16 +1048,26 @@ func _open_settings() -> void:
 		_open_android_settings()
 		return
 	var o := UiKit.make_overlay(self, "SETTINGS", 900)
-	UiKit.add_label(o.box, "GAMES FOLDER", 20, UiKit.accent)
-	UiKit.add_label(o.box, library.games_dir, 18)
-	var row := UiKit.add_row(o.box)
+	# Everything but the bottom buttons scrolls, so it fits any screen.
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	scroll.custom_minimum_size = Vector2(0, minf(get_viewport_rect().size.y - 230.0, 600.0))
+	o.box.add_child(scroll)
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 14)
+	scroll.add_child(box)
+	UiKit.add_label(box, "GAMES FOLDER", 20, UiKit.accent)
+	UiKit.add_label(box, library.games_dir, 18)
+	var row := UiKit.add_row(box)
 	o.focus_target = UiKit.add_button(row, "CHANGE FOLDER...", func(): _pick_file(true, PackedStringArray(), library.games_dir, _set_games_dir))
 	UiKit.add_button(row, "OPEN FOLDER", func(): OS.shell_open(library.games_dir))
 	UiKit.add_button(row, "RESCAN", _set_games_dir.bind(library.games_dir))
 	UiKit.add_button(row, "DOWNLOAD A GAME", _open_downloader)
 
-	UiKit.add_label(o.box, "SKIN", 20, UiKit.accent)
-	row = UiKit.add_row(o.box)
+	UiKit.add_label(box, "SKIN", 20, UiKit.accent)
+	row = UiKit.add_row(box)
 	UiKit.add_button(row, " < ", _cycle_skin.bind(-1))
 	var skin_label := UiKit.add_label(row, SKIN_NAMES[library.settings.skin], 22)
 	skin_label.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -929,8 +1075,27 @@ func _open_settings() -> void:
 	skin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UiKit.add_button(row, " > ", _cycle_skin.bind(1))
 
-	UiKit.add_label(o.box, "ACHIEVEMENT SOUND", 20, UiKit.accent)
-	row = UiKit.add_row(o.box)
+	if not android:
+		UiKit.add_label(box, "UPDATES", 20, UiKit.accent)
+		var urow := UiKit.add_row(box)
+		var channel_label := UiKit.add_label(urow, "", 22)
+		var cycle_channel := func(step: int) -> void:
+			var kinds := ["github", "release", "off"]
+			var cur: String = library.settings.get("update_channel", "")
+			var next: String = kinds[wrapi(kinds.find(cur) + step, 0, kinds.size())] if cur in kinds else kinds[0]
+			_set_update_channel(next, false)
+			channel_label.text = Updater.CHANNEL_NAMES[next]
+		UiKit.add_button(urow, " < ", cycle_channel.bind(-1))
+		urow.move_child(channel_label, -1)
+		channel_label.text = Updater.CHANNEL_NAMES.get(library.settings.get("update_channel", ""), "NOT SET")
+		channel_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+		channel_label.custom_minimum_size = Vector2(300, 0)
+		channel_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		UiKit.add_button(urow, " > ", cycle_channel.bind(1))
+		UiKit.add_button(urow, "CHECK NOW", _check_updates_now)
+
+	UiKit.add_label(box, "ACHIEVEMENT SOUND", 20, UiKit.accent)
+	row = UiKit.add_row(box)
 	var sound_label := UiKit.add_label(row, "", 22)
 	var cycle_sound := func(step: int) -> void:
 		var kinds: Array = Achievements.SOUNDS
@@ -948,8 +1113,8 @@ func _open_settings() -> void:
 	sound_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UiKit.add_button(row, " > ", cycle_sound.bind(1))
 
-	UiKit.add_label(o.box, "DISCORD RICH PRESENCE", 20, UiKit.accent)
-	row = UiKit.add_row(o.box)
+	UiKit.add_label(box, "DISCORD RICH PRESENCE", 20, UiKit.accent)
+	row = UiKit.add_row(box)
 	var toggle := Button.new()
 	row.add_child(toggle)
 	toggle.toggle_mode = true
@@ -963,8 +1128,8 @@ func _open_settings() -> void:
 	row.add_child(app_id)
 	UiKit.add_button(row, "SAVE", func(): _save_discord(toggle.button_pressed, app_id.text))
 
-	UiKit.add_label(o.box, "FRIENDS SERVER", 20, UiKit.accent)
-	row = UiKit.add_row(o.box)
+	UiKit.add_label(box, "FRIENDS SERVER", 20, UiKit.accent)
+	row = UiKit.add_row(box)
 	var server := LineEdit.new()
 	server.placeholder_text = "https://your-worker.workers.dev"
 	server.text = library.settings.friends_server

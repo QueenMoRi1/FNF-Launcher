@@ -17,6 +17,14 @@ const BUS := "ChartViewer"
 const SEEK_SECONDS := 5.0
 const KEY_HINTS := "↑↓ SONG   ←→ SEEK   Q/W DIFFICULTY   SPACE PAUSE   ESC BACK"
 const PAD_HINTS := "↑↓ SONG   ←→ SEEK   LB/RB DIFFICULTY   A PAUSE   B BACK"
+# Secret play mode: hold M for 5 seconds to play BF's side with D F J K.
+const PLAY_HINTS := "D F J K  PLAY  (ARROWS WORK TOO)   ESC  STOP PLAYING"
+const PLAY_KEYS := [KEY_D, KEY_F, KEY_J, KEY_K]
+const PLAY_ARROWS := [KEY_LEFT, KEY_DOWN, KEY_UP, KEY_RIGHT]
+const PLAY_KEY_NAMES := ["D", "F", "J", "K"]
+const HOLD_M_SECONDS := 5.0
+const FNF_ASSETS := "res://assets/funkin/"
+const COUNTDOWN := [["introTHREE.ogg", ""], ["introTWO.ogg", "ready.png"], ["introONE.ogg", "set.png"], ["introGO.ogg", "go.png"]]
 
 var songs: Array = [] # [{title, game, path}] from Library.all_songs()
 var index := 0
@@ -44,6 +52,16 @@ var cooldown := 0.25
 var hold_dir := 0
 var hold_time := 0.0
 var picker_fade := 0.0
+var play: PlayMode = null # the secret play mode, while it's on
+var play_started := false # countdown over, song running
+var m_held := 0.0
+var count_next := 0
+var crochet := 500.0
+var held := [false, false, false, false]
+var popup := ""
+var popup_time := 0.0
+var results: PanelContainer
+var font: Font
 
 var bg: ColorRect
 var post: ColorRect
@@ -110,6 +128,7 @@ func _ready() -> void:
 	load_timer.timeout.connect(_load_song)
 	add_child(load_timer)
 
+	font = load(FNF_ASSETS + "vcr.ttf")
 	Music.player.stream_paused = true
 	_select(index)
 
@@ -225,13 +244,9 @@ func _load_song() -> void:
 
 
 func _load_chart() -> void:
-	chart = Chart.load_chart(charts[chart_i], songs[index].path) if chart_i >= 0 else {}
-	# Some mods ship a broken difficulty: fall back to the next one that reads.
-	var tries := 1
-	while chart.is_empty() and tries < charts.size():
-		chart_i = posmod(chart_i + 1, charts.size())
-		chart = Chart.load_chart(charts[chart_i], songs[index].path)
-		tries += 1
+	var loaded := Chart.load_readable(charts, chart_i, songs[index].path)
+	chart = loaded[0]
+	chart_i = loaded[1]
 	if chart.is_empty():
 		status_label.text = "NO CHART FOUND. JUST VIBES" if charts.is_empty() else "COULDN'T READ THIS CHART"
 	else:
@@ -257,6 +272,10 @@ func _change_difficulty(step: int) -> void:
 
 
 func _on_song_finished() -> void:
+	if play:
+		if results == null:
+			_show_results()
+		return
 	if now_ms > 30000.0:
 		Achievements.unlock("full_song")
 	_select(1, true)
@@ -332,18 +351,37 @@ func _process(delta: float) -> void:
 	time += delta
 	if not Cheats.active:
 		_handle_input(delta)
+	if play == null:
+		_check_m_hold(delta)
 
-	# Smooth song clock that follows the audio.
-	if inst.playing and not paused:
+	# Smooth song clock that follows the audio (during the play-mode countdown it
+	# just counts up to 0, where the song starts).
+	if play and not play_started:
+		now_ms += delta * 1000.0
+		_countdown()
+		if now_ms >= 0.0:
+			play_started = true
+			_play_from(0.0)
+	elif inst.playing and not paused:
 		var est := _audio_pos() * 1000.0
 		now_ms += delta * 1000.0
 		now_ms = est if absf(est - now_ms) > 60.0 else lerpf(now_ms, est, 0.1)
 
 	_hit_notes()
+	if play and play_started and results == null:
+		if play.check_misses(now_ms) > 0:
+			popup = "MISS"
+			popup_time = 0.6
+		if now_ms > play.last_end + 2000.0:
+			_show_results()
+	popup_time = maxf(popup_time - delta, 0.0)
 	for side in 2:
 		side_glow[side] = maxf(side_glow[side] - delta * 2.5, 0.0)
 		for d in 4:
-			if now_ms < hold_until[side][d]:
+			var player_lane: bool = play != null and side == 1
+			if player_lane and not held[d]:
+				hold_until[1][d] = 0.0 # let go of a sustain: it stops
+			if hold_until[side][d] > 0.0 and now_ms < hold_until[side][d]:
 				flash[side][d] = 1.0
 			else:
 				flash[side][d] = maxf(flash[side][d] - delta * 6.0, 0.0)
@@ -379,6 +417,8 @@ func _handle_input(delta: float) -> void:
 	if cooldown > 0.0:
 		cooldown -= delta
 		return
+	if play:
+		return # play mode reads its keys in _input
 	if Input.is_action_just_pressed("ui_cancel"):
 		_close()
 		return
@@ -407,6 +447,8 @@ func _handle_input(delta: float) -> void:
 
 
 func _gui_input(event: InputEvent) -> void:
+	if play:
+		return
 	var wheel := event as InputEventMouseButton
 	if wheel and wheel.pressed and wheel.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
 		_select(-1 if wheel.button_index == MOUSE_BUTTON_WHEEL_UP else 1, true)
@@ -422,6 +464,8 @@ func _hit_notes() -> void:
 		if now_ms - n[0] > 250.0:
 			continue # skipped over by a seek or a hitch
 		var side: int = n[1]
+		if play and side == 1:
+			continue # BF's notes are yours to hit in play mode
 		var d: int = n[2]
 		flash[side][d] = 1.0
 		hold_until[side][d] = maxf(hold_until[side][d], n[0] + n[3])
@@ -506,6 +550,10 @@ func _draw_stage() -> void:
 
 	# Strums and notes.
 	var speed: float = chart.get("speed", 2.0) * SCROLL
+	if play:
+		var x0 := _strum_pos(1, 0).x - NOTE_SIZE
+		var x1 := _strum_pos(1, 3).x + NOTE_SIZE
+		stage.draw_rect(Rect2(x0, 0, x1 - x0, stage.size.y), Color(0, 0, 0, 0.35))
 	for side in 2:
 		for d in 4:
 			var p := _strum_pos(side, d)
@@ -520,6 +568,9 @@ func _draw_stage() -> void:
 			if head_y > stage.size.y + NOTE_SIZE:
 				break
 			var end_ms: float = n[0] + n[3]
+			if play and n[1] == 1:
+				_draw_player_note(n, play.state.get(i, 0), head_y, end_ms, speed)
+				continue
 			if end_ms < now_ms or (n[3] <= 0.0 and n[0] <= now_ms):
 				continue
 			var p := _strum_pos(n[1], n[2])
@@ -531,6 +582,9 @@ func _draw_stage() -> void:
 					stage.draw_rect(Rect2(p.x - 9.0, top, 18.0, bottom - top), color * Color(1, 1, 1, 0.6))
 			if n[0] > now_ms:
 				_arrow(Vector2(p.x, head_y), n[2], NOTE_SIZE, color, Color.WHITE if not n[4] else Color(1, 0.2, 0.2))
+
+	if play:
+		_draw_play_hud()
 
 	# Progress bar.
 	if length_s > 0.0:
@@ -568,15 +622,218 @@ func _draw_fx() -> void:
 
 ## An FNF-style arrow: an up arrow shape rotated per lane.
 func _arrow(pos: Vector2, d: int, size: float, fill: Color, outline: Color) -> void:
+	draw_arrow(stage, pos, d, size, fill, outline)
+
+
+## An FNF-style arrow on `canvas`: an up arrow shape rotated per lane.
+static func draw_arrow(canvas: CanvasItem, pos: Vector2, d: int, size: float, fill: Color, outline: Color) -> void:
 	var pts := PackedVector2Array([Vector2(0, -1), Vector2(1, 0.02), Vector2(0.42, 0.02), Vector2(0.42, 0.95),
 		Vector2(-0.42, 0.95), Vector2(-0.42, 0.02), Vector2(-1, 0.02)])
-	stage.draw_set_transform(pos, ARROW_ROT[d], Vector2(size, size) / 2.0)
+	canvas.draw_set_transform(pos, ARROW_ROT[d], Vector2(size, size) / 2.0)
 	if fill.a > 0.0:
-		stage.draw_colored_polygon(pts, fill)
+		canvas.draw_colored_polygon(pts, fill)
 	var loop := pts.duplicate()
 	loop.append(pts[0])
-	stage.draw_polyline(loop, outline, 0.13, true)
-	stage.draw_set_transform(Vector2.ZERO)
+	canvas.draw_polyline(loop, outline, 0.13, true)
+	canvas.draw_set_transform(Vector2.ZERO)
+
+
+# --- Secret play mode (hold M for 5 seconds) ---------------------------------------
+
+func _check_m_hold(delta: float) -> void:
+	var can := not AndroidApps.is_android() and not chart.is_empty() and inst.stream != null and cooldown <= 0.0
+	if can and Input.is_physical_key_pressed(KEY_M):
+		m_held += delta
+	else:
+		m_held = 0.0
+	# A growing shake from 1.5 s on, as a hint that something's coming.
+	var shake := clampf((m_held - 1.5) / (HOLD_M_SECONDS - 1.5), 0.0, 1.0)
+	stage.position = Vector2(randf_range(-1, 1), randf_range(-1, 1)) * 7.0 * shake
+	if m_held >= HOLD_M_SECONDS:
+		m_held = 0.0
+		stage.position = Vector2.ZERO
+		_start_play()
+
+
+## The song restarts with FNF's countdown and you play BF's side.
+func _start_play() -> void:
+	var p := PlayMode.new(chart.notes)
+	if p.is_empty():
+		status_label.text = "NO NOTES ON BF'S SIDE IN THIS CHART"
+		return
+	play = p
+	play_started = false
+	count_next = 0
+	results = null
+	held = [false, false, false, false]
+	Achievements.unlock("jukebox_game")
+	paused = false
+	inst.stop()
+	for v in voices:
+		v.stop()
+	crochet = 60000.0 / maxf(Chart.bpm_at(chart.bpms, 0.0), 1.0)
+	now_ms = -crochet * 4.6
+	_resync()
+	picker_fade = 0.0
+	picker.modulate.a = 0.0
+	status_label.text = ""
+	hints_label.text = PLAY_HINTS
+
+
+func _countdown() -> void:
+	# THREE, TWO (ready), ONE (set), GO: one per beat, ending a beat before the song.
+	while count_next < 4 and now_ms >= -crochet * (4 - count_next):
+		var step: Array = COUNTDOWN[count_next]
+		count_next += 1
+		var sound := AudioStreamPlayer.new()
+		sound.stream = load(FNF_ASSETS + step[0])
+		add_child(sound)
+		sound.finished.connect(sound.queue_free)
+		sound.play()
+		if step[1] == "":
+			continue
+		var tex: Texture2D = load(FNF_ASSETS + step[1])
+		if tex == null:
+			continue
+		var img := TextureRect.new()
+		img.texture = tex
+		img.mouse_filter = MOUSE_FILTER_IGNORE
+		img.size = tex.get_size() * 0.6
+		img.pivot_offset = img.size / 2.0
+		img.position = Vector2(stage.size.x / 2.0, stage.size.y * 0.42) - img.size / 2.0
+		img.scale = Vector2(1.1, 1.1)
+		add_child(img)
+		var tw := img.create_tween()
+		tw.tween_property(img, "scale", Vector2.ONE, crochet / 1000.0 * 0.4)
+		tw.parallel().tween_property(img, "modulate:a", 0.0, crochet / 1000.0).set_ease(Tween.EASE_IN)
+		tw.tween_callback(img.queue_free)
+
+
+func _input(event: InputEvent) -> void:
+	if play == null:
+		return
+	var key := event as InputEventKey
+	if key == null or key.echo:
+		return
+	if key.pressed and (key.keycode == KEY_ESCAPE or (results and key.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE])):
+		get_viewport().set_input_as_handled()
+		_end_play()
+		return
+	var lane := PLAY_KEYS.find(key.physical_keycode)
+	if lane < 0:
+		lane = PLAY_ARROWS.find(key.physical_keycode)
+	if lane < 0:
+		return
+	get_viewport().set_input_as_handled()
+	held[lane] = key.pressed
+	if key.pressed and play_started and results == null:
+		_player_press(lane)
+
+
+func _player_press(lane: int) -> void:
+	var t := _audio_pos() * 1000.0 if inst.playing else now_ms
+	flash[1][lane] = maxf(flash[1][lane], 0.35)
+	var hit := play.press(lane, t)
+	if hit[1] < 0:
+		return
+	var n: Array = chart.notes[hit[1]]
+	popup = hit[0]
+	popup_time = 0.6
+	flash[1][lane] = 1.0
+	side_glow[1] = 1.0
+	if n[3] > 0.0:
+		hold_until[1][lane] = n[0] + n[3]
+	_burst(_strum_pos(1, lane), LANE_COLORS[lane])
+
+
+func _show_results() -> void:
+	play.finish()
+	var center := CenterContainer.new()
+	center.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(center)
+	center.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	results = PanelContainer.new()
+	center.add_child(results)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 10)
+	results.add_child(box)
+	for line in [["SONG CLEARED!", 40, UiKit.accent], [songs[index].title.to_upper(), 24, Color.WHITE], [play.rank(), 52, UiKit.accent],
+			["SCORE  %s" % PlayMode.commas(play.score), 26, Color.WHITE], ["ACCURACY  %.2f%%" % play.accuracy(), 22, Color.WHITE],
+			["MISSES  %d     MAX COMBO  %d" % [play.misses, play.max_combo], 22, Color.WHITE], ["PRESS ENTER", 18, Color(1, 1, 1, 0.7)]]:
+		var l := UiKit.add_label(box, line[0], line[1], line[2])
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+	results.modulate.a = 0.0
+	results.create_tween().tween_property(results, "modulate:a", 1.0, 0.25)
+
+
+## Back to watching: the rest of the song, or the next one if it ended.
+func _end_play() -> void:
+	var song_over := results != null and not inst.playing
+	if results:
+		results.get_parent().queue_free() # its CenterContainer
+		results = null
+	play = null
+	play_started = false
+	held = [false, false, false, false]
+	popup_time = 0.0
+	cooldown = 0.3 # the Esc that ended it mustn't also close the viewer
+	hints_label.text = PAD_HINTS if Input.get_connected_joypads().size() > 0 else KEY_HINTS
+	if song_over:
+		_select(1, true)
+	elif not inst.playing:
+		_play_from(0.0)
+	_resync()
+
+
+func _draw_player_note(n: Array, st: int, head_y: float, end_ms: float, speed: float) -> void:
+	var p := _strum_pos(1, n[2])
+	var color: Color = Color(0.35, 0.35, 0.38) if n[4] else LANE_COLORS[n[2]]
+	var alpha := 0.3 if st == 2 else 1.0
+	var tail: bool = n[3] > 0.0 and end_ms > now_ms
+	if st == 1:
+		# Hit: only a sustain you're still holding stays, draining at the strum.
+		if tail and held[n[2]] and hold_until[1][n[2]] >= end_ms - 1.0:
+			var bottom: float = STRUM_Y + (end_ms - now_ms) * speed
+			stage.draw_rect(Rect2(p.x - 9.0, STRUM_Y, 18.0, bottom - STRUM_Y), color * Color(1, 1, 1, 0.6))
+		return
+	if head_y < -NOTE_SIZE and not tail:
+		return
+	if tail:
+		var bottom: float = STRUM_Y + (end_ms - now_ms) * speed
+		if bottom > head_y:
+			stage.draw_rect(Rect2(p.x - 9.0, head_y, 18.0, bottom - head_y), color * Color(1, 1, 1, 0.6 * alpha))
+	if head_y > -NOTE_SIZE:
+		_arrow(Vector2(p.x, head_y), n[2], NOTE_SIZE, color * Color(1, 1, 1, alpha), Color(1, 1, 1, alpha) if not n[4] else Color(1, 0.2, 0.2, alpha))
+
+
+func _draw_play_hud() -> void:
+	var x0 := _strum_pos(1, 0).x - NOTE_SIZE
+	var w := _strum_pos(1, 3).x + NOTE_SIZE - x0
+	# The keys, shown during the countdown.
+	var key_alpha := clampf(1.0 - (now_ms + 400.0) / 900.0, 0.0, 1.0)
+	if key_alpha > 0.0:
+		for lane in 4:
+			var r := Rect2(_strum_pos(1, lane).x - 26.0, STRUM_Y + 50.0, 52.0, 52.0)
+			stage.draw_rect(r, Color(1, 1, 1, 0.92 * key_alpha))
+			stage.draw_rect(r, Color(0, 0, 0, key_alpha), false, 3.0)
+			stage.draw_string(font, Vector2(r.position.x, r.position.y + 39.0), PLAY_KEY_NAMES[lane], HORIZONTAL_ALIGNMENT_CENTER, 52.0, 36, Color(0, 0, 0, key_alpha))
+		stage.draw_string_outline(font, Vector2(x0, STRUM_Y + 140.0), "PRESS THEM ON BEAT", HORIZONTAL_ALIGNMENT_CENTER, w, 20, 6, Color(0, 0, 0, key_alpha))
+		stage.draw_string(font, Vector2(x0, STRUM_Y + 140.0), "PRESS THEM ON BEAT", HORIZONTAL_ALIGNMENT_CENTER, w, 20, Color(1, 1, 1, key_alpha))
+	# Rating and combo.
+	if popup_time > 0.0:
+		var a := clampf(popup_time / 0.3, 0.0, 1.0)
+		var c := Color(1, 0.35, 0.35, a) if popup == "MISS" else Color(UiKit.accent, a)
+		var y := stage.size.y * 0.45 - (0.6 - popup_time) * 40.0
+		stage.draw_string_outline(font, Vector2(x0, y), popup, HORIZONTAL_ALIGNMENT_CENTER, w, 44, 10, Color(0, 0, 0, a))
+		stage.draw_string(font, Vector2(x0, y), popup, HORIZONTAL_ALIGNMENT_CENTER, w, 44, c)
+		if play.combo >= 2:
+			stage.draw_string_outline(font, Vector2(x0, y + 46.0), str(play.combo), HORIZONTAL_ALIGNMENT_CENTER, w, 34, 8, Color(0, 0, 0, a))
+			stage.draw_string(font, Vector2(x0, y + 46.0), str(play.combo), HORIZONTAL_ALIGNMENT_CENTER, w, 34, Color(1, 1, 1, a))
+	# Score line, top centre.
+	var hud := "SCORE %s   ·   MISSES %d   ·   %.1f%%" % [PlayMode.commas(play.score), play.misses, play.accuracy()]
+	stage.draw_string_outline(font, Vector2(0, 34.0), hud, HORIZONTAL_ALIGNMENT_CENTER, stage.size.x, 24, 8, Color.BLACK)
+	stage.draw_string(font, Vector2(0, 34.0), hud, HORIZONTAL_ALIGNMENT_CENTER, stage.size.x, 24, Color.WHITE)
 
 
 static func _fmt(seconds: float) -> String:

@@ -51,6 +51,7 @@ const LIST := {
 	"idle": ["Still There?", "Left the launcher alone for an hour.", "Good things come to those who wait. A long time."],
 	"maybe": ["Make Up Your Mind", "Couldn't decide.", "Sometimes the answer is somewhere in between."],
 	"kill": ["Chose Violence", "Picked the worst possible answer.", "There's always a worse answer."],
+	"jukebox_game": ["Off the Clock", "Played along in the chart viewer.", "Hold onto the music a little longer than usual."],
 	"cope": ["Cope", "You're coping rn i totally owned u", "Surely this is the year. Surely."],
 	# The end
 	"all": ["Completionist", "Unlock every other achievement.", ""],

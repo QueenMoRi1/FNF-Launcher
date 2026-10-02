@@ -80,6 +80,19 @@ static func find_voices(inst_path: String) -> Array:
 	return exact if not exact.is_empty() else split.slice(0, 2)
 
 
+## Loads charts[index], or the next difficulty that reads if that one is
+## broken (some mods ship one). Returns [chart or {}, index actually used].
+static func load_readable(charts: Array, index: int, inst_path: String) -> Array:
+	if index < 0 or charts.is_empty():
+		return [{}, index]
+	for tries in charts.size():
+		var i := posmod(index + tries, charts.size())
+		var chart := load_chart(charts[i], inst_path)
+		if not chart.is_empty():
+			return [chart, i]
+	return [{}, index]
+
+
 static func load_chart(entry: Dictionary, inst_path: String) -> Dictionary:
 	var json = _json(entry.path)
 	if not json is Dictionary:

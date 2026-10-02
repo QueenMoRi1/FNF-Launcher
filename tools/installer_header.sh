@@ -33,6 +33,13 @@ FNF_ASSET_FILES=(
 	preload/sounds/scrollMenu.ogg
 	preload/sounds/confirmMenu.ogg
 	preload/sounds/cancelMenu.ogg
+	shared/sounds/gameplay/countdown/funkin/introTHREE.ogg
+	shared/sounds/gameplay/countdown/funkin/introTWO.ogg
+	shared/sounds/gameplay/countdown/funkin/introONE.ogg
+	shared/sounds/gameplay/countdown/funkin/introGO.ogg
+	shared/images/ui/countdown/funkin/ready.png
+	shared/images/ui/countdown/funkin/set.png
+	shared/images/ui/countdown/funkin/go.png
 )
 SLR4_APPID=4183110
 

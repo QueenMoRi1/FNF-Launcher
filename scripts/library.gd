@@ -19,6 +19,8 @@ var settings := {
 	"discord_client_id": "",
 	"friends_server": "",
 	"friends_share": true,
+	"update_channel": "", # "github", "release" or "off"; "" = not asked yet
+	"update_sha": "", # GitHub channel: the commit the installed build came from
 }
 ## folder path -> {name, exe, icon_override, slug, prefix, songs, gb}
 ## gb is the GameBanana match: {id, name, url, art_url} or {none: true}
