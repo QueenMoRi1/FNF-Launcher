@@ -1,3 +1,7 @@
+psa: if you're on an old version of fnf launcher (like the first one) go grab the new installer from itch/github and run it once.
+it updates in place, your mods and saves stay.
+after that the launcher tells you about updates by itself so you never have to read a post like this again 🍊
+
 # FNF Launcher
 
 A Friday Night Funkin' mod launcher for Linux, styled like FNF itself. Drop in Windows FNF mods (or download them from inside the launcher) and play them through GE-Proton, with a controller-friendly menu, an instrumental jukebox, Steam friends integration and Discord Rich Presence.
