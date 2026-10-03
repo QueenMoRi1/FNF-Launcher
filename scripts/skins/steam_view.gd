@@ -69,13 +69,18 @@ func _build(empty_hint: String) -> void:
 	fade.offset_top = 200
 	fade.offset_bottom = 520
 
-	var top := UiKit.add_label(self, "LIBRARY", 26, Color.WHITE)
+	background_nodes = [bg]
+	mod_art_nodes = [hero, fade]
+	var header := _group("header")
+	var games := _group("games")
+	var top := UiKit.add_label(header, "LIBRARY", 26, Color.WHITE)
 	top.autowrap_mode = TextServer.AUTOWRAP_OFF
 	top.position = Vector2(LEFT, 24)
-	var tab := UiKit.add_label(self, "FNF MODS", 18, BLUE)
+	var tab := UiKit.add_label(header, "FNF MODS", 18, BLUE)
 	tab.autowrap_mode = TextServer.AUTOWRAP_OFF
 	tab.position = Vector2(LEFT + 150, 31)
 	clock = UiKit.add_label(self, "", 22, Color(0.85, 0.87, 0.9))
+	parts["clock"] = clock
 	clock.autowrap_mode = TextServer.AUTOWRAP_OFF
 	clock.set_anchors_and_offsets_preset(PRESET_TOP_RIGHT)
 	clock.offset_left = -220
@@ -83,7 +88,7 @@ func _build(empty_hint: String) -> void:
 	clock.offset_top = 26
 	clock.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 
-	title_label = UiKit.add_label(self, "", 52, Color.WHITE)
+	title_label = UiKit.add_label(header, "", 52, Color.WHITE)
 	title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title_label.add_theme_font_override("font", _font(700))
@@ -93,7 +98,7 @@ func _build(empty_hint: String) -> void:
 	var play_row := HBoxContainer.new()
 	play_row.add_theme_constant_override("separation", 22)
 	play_row.position = Vector2(LEFT, 205)
-	add_child(play_row)
+	header.add_child(play_row)
 	play_button = PanelContainer.new()
 	var green := StyleBoxTexture.new()
 	green.texture = _gradient(GREEN_TOP, GREEN_BOTTOM)
@@ -113,7 +118,7 @@ func _build(empty_hint: String) -> void:
 
 	for item in items:
 		var cap := _make_capsule(item)
-		add_child(cap)
+		games.add_child(cap)
 		capsules.append(cap)
 
 	if items.is_empty():
@@ -207,6 +212,8 @@ func sounds() -> Dictionary:
 
 
 func _process(delta: float) -> void:
+	# Long titles stop short of the jukebox in the top-right corner.
+	title_label.size.x = maxf(300.0, size.x - LEFT - 480.0)
 	var t := 1.0 - exp(-delta * 12.0)
 	for c in capsules.size():
 		capsules[c].position = capsules[c].position.lerp(_capsule_target(c), t)

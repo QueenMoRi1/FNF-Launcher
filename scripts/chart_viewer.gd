@@ -54,6 +54,11 @@ var hold_time := 0.0
 var picker_fade := 0.0
 var play: PlayMode = null # the secret play mode, while it's on
 var play_started := false # countdown over, song running
+var play_side := 1 # whose notes you play: 1 BF, 0 the opponent
+var play_rate := 1.0 # song speed in play mode
+var play_card: PanelContainer # the card after holding M (side / speed / difficulty)
+var setup_cursor := 0
+var setup_rows_ui: Array[Label] = []
 var m_held := 0.0
 var count_next := 0
 var crochet := 500.0
@@ -62,6 +67,13 @@ var popup := ""
 var popup_time := 0.0
 var results: PanelContainer
 var font: Font
+# A custom theme's chart viewer look (see _load_theme_looks).
+var lane_colors: Array = LANE_COLORS.duplicate()
+var vis_colors: Array = []
+var fx_kaleido := true
+var fx_shake := true
+var fx_ribbons := true
+var fx_amount := 1.0
 
 var bg: ColorRect
 var post: ColorRect
@@ -129,6 +141,7 @@ func _ready() -> void:
 	add_child(load_timer)
 
 	font = load(FNF_ASSETS + "vcr.ttf")
+	_load_theme_looks()
 	Music.player.stream_paused = true
 	_select(index)
 
@@ -351,20 +364,20 @@ func _process(delta: float) -> void:
 	time += delta
 	if not Cheats.active:
 		_handle_input(delta)
-	if play == null:
+	if play == null and play_card == null:
 		_check_m_hold(delta)
 
 	# Smooth song clock that follows the audio (during the play-mode countdown it
 	# just counts up to 0, where the song starts).
 	if play and not play_started:
-		now_ms += delta * 1000.0
+		now_ms += delta * 1000.0 * play_rate
 		_countdown()
 		if now_ms >= 0.0:
 			play_started = true
 			_play_from(0.0)
 	elif inst.playing and not paused:
 		var est := _audio_pos() * 1000.0
-		now_ms += delta * 1000.0
+		now_ms += delta * 1000.0 * (play_rate if play else 1.0)
 		now_ms = est if absf(est - now_ms) > 60.0 else lerpf(now_ms, est, 0.1)
 
 	_hit_notes()
@@ -378,9 +391,9 @@ func _process(delta: float) -> void:
 	for side in 2:
 		side_glow[side] = maxf(side_glow[side] - delta * 2.5, 0.0)
 		for d in 4:
-			var player_lane: bool = play != null and side == 1
+			var player_lane: bool = play != null and side == play_side
 			if player_lane and not held[d]:
-				hold_until[1][d] = 0.0 # let go of a sustain: it stops
+				hold_until[play_side][d] = 0.0 # let go of a sustain: it stops
 			if hold_until[side][d] > 0.0 and now_ms < hold_until[side][d]:
 				flash[side][d] = 1.0
 			else:
@@ -395,12 +408,17 @@ func _process(delta: float) -> void:
 	hue = fmod(hue + delta * (0.025 + bass * 0.12), 1.0)
 	trip = lerpf(trip, clampf((_notes_per_second() - 5.0) / 9.0, 0.0, 1.0), delta * 1.2)
 	var size_now := get_viewport_rect().size
-	for m: ShaderMaterial in [bg.material, post.material]:
-		m.set_shader_parameter("time", time)
-		m.set_shader_parameter("bass", bass)
-		m.set_shader_parameter("beat", beat)
-	bg.material.set_shader_parameter("hue", hue)
-	bg.material.set_shader_parameter("trip", trip)
+	var fx_bass := bass * fx_amount
+	var fx_beat := beat * fx_amount
+	bg.material.set_shader_parameter("time", time)
+	bg.material.set_shader_parameter("bass", fx_bass)
+	bg.material.set_shader_parameter("beat", fx_beat)
+	bg.material.set_shader_parameter("ribbons", 1.0 if fx_ribbons else 0.0)
+	post.material.set_shader_parameter("time", time)
+	post.material.set_shader_parameter("bass", fx_bass if fx_shake else 0.0)
+	post.material.set_shader_parameter("beat", fx_beat if fx_shake else 0.0)
+	bg.material.set_shader_parameter("hue", vis_colors[0].h if not vis_colors.is_empty() else hue)
+	bg.material.set_shader_parameter("trip", trip if fx_kaleido else 0.0)
 	bg.material.set_shader_parameter("aspect", size_now.x / maxf(size_now.y, 1.0))
 
 	if length_s > 0.0:
@@ -417,8 +435,8 @@ func _handle_input(delta: float) -> void:
 	if cooldown > 0.0:
 		cooldown -= delta
 		return
-	if play:
-		return # play mode reads its keys in _input
+	if play or play_card:
+		return # play mode and its setup card read their keys in _input
 	if Input.is_action_just_pressed("ui_cancel"):
 		_close()
 		return
@@ -464,13 +482,13 @@ func _hit_notes() -> void:
 		if now_ms - n[0] > 250.0:
 			continue # skipped over by a seek or a hitch
 		var side: int = n[1]
-		if play and side == 1:
-			continue # BF's notes are yours to hit in play mode
+		if play and side == play_side:
+			continue # your notes are yours to hit in play mode
 		var d: int = n[2]
 		flash[side][d] = 1.0
 		hold_until[side][d] = maxf(hold_until[side][d], n[0] + n[3])
 		side_glow[side] = 1.0
-		_burst(_strum_pos(side, d), Color(0.6, 0.6, 0.6) if n[4] else LANE_COLORS[d])
+		_burst(_strum_pos(side, d), Color(0.6, 0.6, 0.6) if n[4] else lane_colors[d])
 
 
 func _notes_per_second() -> float:
@@ -551,15 +569,15 @@ func _draw_stage() -> void:
 	# Strums and notes.
 	var speed: float = chart.get("speed", 2.0) * SCROLL
 	if play:
-		var x0 := _strum_pos(1, 0).x - NOTE_SIZE
-		var x1 := _strum_pos(1, 3).x + NOTE_SIZE
+		var x0 := _strum_pos(play_side, 0).x - NOTE_SIZE
+		var x1 := _strum_pos(play_side, 3).x + NOTE_SIZE
 		stage.draw_rect(Rect2(x0, 0, x1 - x0, stage.size.y), Color(0, 0, 0, 0.35))
 	for side in 2:
 		for d in 4:
 			var p := _strum_pos(side, d)
 			var f: float = flash[side][d]
-			_arrow(p, d, NOTE_SIZE * (1.0 + 0.12 * f), LANE_COLORS[d] * Color(1, 1, 1, f) if f > 0.01 else Color(0, 0, 0, 0.25),
-				LANE_COLORS[d].lerp(Color.WHITE, 0.6) if f > 0.01 else Color(0.75, 0.75, 0.8, 0.6))
+			_arrow(p, d, NOTE_SIZE * (1.0 + 0.12 * f), lane_colors[d] * Color(1, 1, 1, f) if f > 0.01 else Color(0, 0, 0, 0.25),
+				lane_colors[d].lerp(Color.WHITE, 0.6) if f > 0.01 else Color(0.75, 0.75, 0.8, 0.6))
 	if not chart.is_empty():
 		var notes: Array = chart.notes
 		for i in range(maxi(next_note - 60, 0), notes.size()):
@@ -568,13 +586,13 @@ func _draw_stage() -> void:
 			if head_y > stage.size.y + NOTE_SIZE:
 				break
 			var end_ms: float = n[0] + n[3]
-			if play and n[1] == 1:
+			if play and n[1] == play_side:
 				_draw_player_note(n, play.state.get(i, 0), head_y, end_ms, speed)
 				continue
 			if end_ms < now_ms or (n[3] <= 0.0 and n[0] <= now_ms):
 				continue
 			var p := _strum_pos(n[1], n[2])
-			var color: Color = Color(0.35, 0.35, 0.38) if n[4] else LANE_COLORS[n[2]]
+			var color: Color = Color(0.35, 0.35, 0.38) if n[4] else lane_colors[n[2]]
 			if n[3] > 0.0:
 				var top := maxf(head_y, STRUM_Y)
 				var bottom: float = STRUM_Y + (end_ms - now_ms) * speed
@@ -604,7 +622,7 @@ func _draw_fx() -> void:
 	for i in count:
 		var band: float = bands[i if i < BANDS else count - 1 - i]
 		var dir := Vector2.from_angle(float(i) / count * TAU + time * 0.25 - PI / 2.0)
-		var color := Color.from_hsv(fmod(hue + float(i) / count, 1.0), 0.75, 1.0, 0.9)
+		var color: Color = Color(vis_colors[i % vis_colors.size()], 0.9) if not vis_colors.is_empty() else Color.from_hsv(fmod(hue + float(i) / count, 1.0), 0.75, 1.0, 0.9)
 		fx.draw_line(c + dir * radius, c + dir * (radius + 6.0 + band * 130.0), color, 5.0, true)
 	for side in 2:
 		var g: float = side_glow[side]
@@ -615,7 +633,7 @@ func _draw_fx() -> void:
 		for d in 4:
 			var f: float = flash[side][d]
 			if f > 0.01:
-				fx.draw_circle(_strum_pos(side, d), 46.0 * f, LANE_COLORS[d] * Color(1, 1, 1, 0.35 * f))
+				fx.draw_circle(_strum_pos(side, d), 46.0 * f, lane_colors[d] * Color(1, 1, 1, 0.35 * f))
 	for s in sparkles:
 		fx.draw_circle(s[0], s[4] * s[2], s[3] * Color(1, 1, 1, s[2]))
 
@@ -652,14 +670,14 @@ func _check_m_hold(delta: float) -> void:
 	if m_held >= HOLD_M_SECONDS:
 		m_held = 0.0
 		stage.position = Vector2.ZERO
-		_start_play()
+		_open_setup()
 
 
 ## The song restarts with FNF's countdown and you play BF's side.
 func _start_play() -> void:
-	var p := PlayMode.new(chart.notes)
+	var p := PlayMode.new(chart.notes, play_side, play_rate)
 	if p.is_empty():
-		status_label.text = "NO NOTES ON BF'S SIDE IN THIS CHART"
+		status_label.text = "NO NOTES ON %s SIDE IN THIS CHART" % ("BF'S" if play_side == 1 else "THE OPPONENT'S")
 		return
 	play = p
 	play_started = false
@@ -669,8 +687,10 @@ func _start_play() -> void:
 	Achievements.unlock("jukebox_game")
 	paused = false
 	inst.stop()
+	inst.pitch_scale = play_rate
 	for v in voices:
 		v.stop()
+		v.pitch_scale = play_rate
 	crochet = 60000.0 / maxf(Chart.bpm_at(chart.bpms, 0.0), 1.0)
 	now_ms = -crochet * 4.6
 	_resync()
@@ -710,6 +730,9 @@ func _countdown() -> void:
 
 
 func _input(event: InputEvent) -> void:
+	if play_card:
+		_setup_input(event)
+		return
 	if play == null:
 		return
 	var key := event as InputEventKey
@@ -732,22 +755,31 @@ func _input(event: InputEvent) -> void:
 
 func _player_press(lane: int) -> void:
 	var t := _audio_pos() * 1000.0 if inst.playing else now_ms
-	flash[1][lane] = maxf(flash[1][lane], 0.35)
+	flash[play_side][lane] = maxf(flash[play_side][lane], 0.35)
 	var hit := play.press(lane, t)
 	if hit[1] < 0:
 		return
 	var n: Array = chart.notes[hit[1]]
 	popup = hit[0]
 	popup_time = 0.6
-	flash[1][lane] = 1.0
-	side_glow[1] = 1.0
+	flash[play_side][lane] = 1.0
+	side_glow[play_side] = 1.0
 	if n[3] > 0.0:
-		hold_until[1][lane] = n[0] + n[3]
-	_burst(_strum_pos(1, lane), LANE_COLORS[lane])
+		hold_until[play_side][lane] = n[0] + n[3]
+	_burst(_strum_pos(play_side, lane), lane_colors[lane])
 
 
 func _show_results() -> void:
 	play.finish()
+	var best := PlayScores.record(songs[index], str(charts[chart_i].label) if chart_i >= 0 and chart_i < charts.size() else "", play)
+	if play.misses == 0:
+		Achievements.unlock("fc")
+	if play.rank() == "PERFECT!!":
+		Achievements.unlock("perfect")
+	if play_side == 0:
+		Achievements.unlock("opponent")
+	if play_rate >= 1.5 and play.accuracy() >= 70.0:
+		Achievements.unlock("speed")
 	var center := CenterContainer.new()
 	center.mouse_filter = MOUSE_FILTER_IGNORE
 	add_child(center)
@@ -759,7 +791,9 @@ func _show_results() -> void:
 	results.add_child(box)
 	for line in [["SONG CLEARED!", 40, UiKit.accent], [songs[index].title.to_upper(), 24, Color.WHITE], [play.rank(), 52, UiKit.accent],
 			["SCORE  %s" % PlayMode.commas(play.score), 26, Color.WHITE], ["ACCURACY  %.2f%%" % play.accuracy(), 22, Color.WHITE],
-			["MISSES  %d     MAX COMBO  %d" % [play.misses, play.max_combo], 22, Color.WHITE], ["PRESS ENTER", 18, Color(1, 1, 1, 0.7)]]:
+			["MISSES  %d     MAX COMBO  %d" % [play.misses, play.max_combo], 22, Color.WHITE],
+			["%s SIDE   ·   %.1fx SPEED%s" % ["BF'S" if play_side == 1 else "OPPONENT'S", play_rate, "   ·   NEW BEST!" if best else ""], 20, UiKit.accent if best else Color(1, 1, 1, 0.8)],
+			["PRESS ENTER", 18, Color(1, 1, 1, 0.7)]]:
 		var l := UiKit.add_label(box, line[0], line[1], line[2])
 		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		l.autowrap_mode = TextServer.AUTOWRAP_OFF
@@ -775,6 +809,9 @@ func _end_play() -> void:
 		results = null
 	play = null
 	play_started = false
+	inst.pitch_scale = 1.0
+	for v in voices:
+		v.pitch_scale = 1.0
 	held = [false, false, false, false]
 	popup_time = 0.0
 	cooldown = 0.3 # the Esc that ended it mustn't also close the viewer
@@ -786,14 +823,98 @@ func _end_play() -> void:
 	_resync()
 
 
+## The card shown after holding M: pick a side, a speed and a difficulty.
+func _open_setup() -> void:
+	setup_cursor = 0
+	var center := CenterContainer.new()
+	center.mouse_filter = MOUSE_FILTER_IGNORE
+	add_child(center)
+	center.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	play_card = PanelContainer.new()
+	center.add_child(play_card)
+	var box := VBoxContainer.new()
+	box.add_theme_constant_override("separation", 12)
+	play_card.add_child(box)
+	var title := UiKit.add_label(box, "PLAY MODE", 40, UiKit.accent)
+	title.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	setup_rows_ui.clear()
+	for i in 4:
+		var l := UiKit.add_label(box, "", 26)
+		l.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		l.autowrap_mode = TextServer.AUTOWRAP_OFF
+		setup_rows_ui.append(l)
+	var hint := UiKit.add_label(box, "↑↓ choose   ←→ change   ENTER start   ESC cancel", 16, Color(1, 1, 1, 0.6))
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_refresh_setup()
+
+
+func _refresh_setup() -> void:
+	var diff := str(charts[chart_i].label).to_upper() if chart_i >= 0 and chart_i < charts.size() else "-"
+	var rows := ["SIDE:  %s" % ("BOYFRIEND" if play_side == 1 else "OPPONENT"), "SPEED:  %.1fx" % play_rate,
+		"DIFFICULTY:  %s" % diff, "START!"]
+	for i in 4:
+		setup_rows_ui[i].text = ("> %s <" % rows[i]) if i == setup_cursor else rows[i]
+		setup_rows_ui[i].add_theme_color_override("font_color", UiKit.accent if i == setup_cursor else Color.WHITE)
+
+
+func _close_setup() -> void:
+	if play_card:
+		play_card.get_parent().queue_free()
+	play_card = null
+	cooldown = 0.3
+
+
+func _setup_input(event: InputEvent) -> void:
+	var dir := Vector2i.ZERO
+	var go := false
+	var back := false
+	var k := event as InputEventKey
+	var b := event as InputEventJoypadButton
+	if k and k.pressed and not k.echo:
+		match k.keycode:
+			KEY_UP: dir.y = -1
+			KEY_DOWN: dir.y = 1
+			KEY_LEFT: dir.x = -1
+			KEY_RIGHT: dir.x = 1
+			KEY_ENTER, KEY_KP_ENTER, KEY_SPACE: go = true
+			KEY_ESCAPE: back = true
+			_: return
+	elif b and b.pressed:
+		match b.button_index:
+			JOY_BUTTON_DPAD_UP: dir.y = -1
+			JOY_BUTTON_DPAD_DOWN: dir.y = 1
+			JOY_BUTTON_DPAD_LEFT: dir.x = -1
+			JOY_BUTTON_DPAD_RIGHT: dir.x = 1
+			JOY_BUTTON_A: go = true
+			JOY_BUTTON_B: back = true
+			_: return
+	else:
+		return
+	get_viewport().set_input_as_handled()
+	if back:
+		_close_setup()
+		return
+	if go:
+		_close_setup()
+		_start_play()
+		return
+	setup_cursor = wrapi(setup_cursor + dir.y, 0, 4)
+	if dir.x != 0:
+		match setup_cursor:
+			0: play_side = 1 - play_side
+			1: play_rate = clampf(snappedf(play_rate + 0.1 * dir.x, 0.1), 0.5, 2.0)
+			2: _change_difficulty(dir.x)
+	_refresh_setup()
+
+
 func _draw_player_note(n: Array, st: int, head_y: float, end_ms: float, speed: float) -> void:
-	var p := _strum_pos(1, n[2])
-	var color: Color = Color(0.35, 0.35, 0.38) if n[4] else LANE_COLORS[n[2]]
+	var p := _strum_pos(play_side, n[2])
+	var color: Color = Color(0.35, 0.35, 0.38) if n[4] else lane_colors[n[2]]
 	var alpha := 0.3 if st == 2 else 1.0
 	var tail: bool = n[3] > 0.0 and end_ms > now_ms
 	if st == 1:
 		# Hit: only a sustain you're still holding stays, draining at the strum.
-		if tail and held[n[2]] and hold_until[1][n[2]] >= end_ms - 1.0:
+		if tail and held[n[2]] and hold_until[play_side][n[2]] >= end_ms - 1.0:
 			var bottom: float = STRUM_Y + (end_ms - now_ms) * speed
 			stage.draw_rect(Rect2(p.x - 9.0, STRUM_Y, 18.0, bottom - STRUM_Y), color * Color(1, 1, 1, 0.6))
 		return
@@ -808,13 +929,13 @@ func _draw_player_note(n: Array, st: int, head_y: float, end_ms: float, speed: f
 
 
 func _draw_play_hud() -> void:
-	var x0 := _strum_pos(1, 0).x - NOTE_SIZE
-	var w := _strum_pos(1, 3).x + NOTE_SIZE - x0
+	var x0 := _strum_pos(play_side, 0).x - NOTE_SIZE
+	var w := _strum_pos(play_side, 3).x + NOTE_SIZE - x0
 	# The keys, shown during the countdown.
 	var key_alpha := clampf(1.0 - (now_ms + 400.0) / 900.0, 0.0, 1.0)
 	if key_alpha > 0.0:
 		for lane in 4:
-			var r := Rect2(_strum_pos(1, lane).x - 26.0, STRUM_Y + 50.0, 52.0, 52.0)
+			var r := Rect2(_strum_pos(play_side, lane).x - 26.0, STRUM_Y + 50.0, 52.0, 52.0)
 			stage.draw_rect(r, Color(1, 1, 1, 0.92 * key_alpha))
 			stage.draw_rect(r, Color(0, 0, 0, key_alpha), false, 3.0)
 			stage.draw_string(font, Vector2(r.position.x, r.position.y + 39.0), PLAY_KEY_NAMES[lane], HORIZONTAL_ALIGNMENT_CENTER, 52.0, 36, Color(0, 0, 0, key_alpha))
@@ -834,6 +955,23 @@ func _draw_play_hud() -> void:
 	var hud := "SCORE %s   ·   MISSES %d   ·   %.1f%%" % [PlayMode.commas(play.score), play.misses, play.accuracy()]
 	stage.draw_string_outline(font, Vector2(0, 34.0), hud, HORIZONTAL_ALIGNMENT_CENTER, stage.size.x, 24, 8, Color.BLACK)
 	stage.draw_string(font, Vector2(0, 34.0), hud, HORIZONTAL_ALIGNMENT_CENTER, stage.size.x, 24, Color.WHITE)
+
+
+## The custom theme's chart viewer settings (arrow and visualizer colours, effects).
+func _load_theme_looks() -> void:
+	var t := CustomTheme.current
+	if t == null:
+		return
+	var arrows := t.colors("arrow colors")
+	if arrows.size() == 4:
+		lane_colors = arrows
+	var vis := str(t.values.get("visualizer colors", "")).to_lower().strip_edges()
+	if vis != "" and vis != "rainbow":
+		vis_colors = t.colors("visualizer colors")
+	fx_kaleido = t.flag("viewer kaleidoscope", true)
+	fx_shake = t.flag("viewer shake", true)
+	fx_ribbons = t.flag("viewer ribbons", true)
+	fx_amount = clampf(t.percent("viewer effects", 100.0) / 100.0, 0.0, 2.0)
 
 
 static func _fmt(seconds: float) -> String:

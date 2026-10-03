@@ -1,0 +1,22 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Candy Shop
+author: orang entertainment
+based on: freeplay
+accent: #ff3d8b
+text: #5a1238
+panel: #fff2f8 94%
+button: #ffd1e6
+button focus: #8ef0d0
+background color: #ffe0ef
+background pattern: stripes.png
+pattern size: 80
+pattern opacity: 45%
+particles: confetti
+particles amount: 60%
+arrow colors: #ff3d8b #6ad8ff #8ef0a0 #ffb03d
+achievement color: #ff3d8b 94%
+mod art: off
+font: Bungee-Regular.ttf
+quips: quips.txt
+cursor: cursor.png
+cursor hotspot: 2 2

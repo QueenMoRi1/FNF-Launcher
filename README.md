@@ -25,7 +25,9 @@ Built with Godot 4.7 for handheld and couch PCs. It was made on a ROG Ally runni
 - **Chart viewer (F6 / L3).** Plays any song from your mods in full, instrumental and vocals, and scrolls its chart with every note auto-hit, over a PS3-CD-player-style visualizer.
 - **Leaderboard (F7).** Your mods ranked by total score (the best score of every song you've played), read straight from each mod's own save file, with a per-song breakdown.
 - **Update notifier.** Pick newest features first (the launcher builds the newest GitHub code for you) or stable releases only (the same build as itch.io), and it tells you when there's something new.
-- **Achievements (F8).** 27 of them, including a secret one for every easter egg, shown as ??? with a vague hint until found. Unlocks pop up with your pick of sound: FNF, Xbox 360, Steam or PS3.
+- **Custom themes.** Colours, gradients, animated backgrounds, font, logo, music, sounds, the intro, the chart viewer's looks, cursor, UI size and where everything sits. 28 example themes, random / theme-of-the-day / seasonal theme modes, and seasonal extras for the plain skins. Use the drag-and-drop theme editor, or write a simple `theme.txt`, and share themes as one `.fnftheme` file.
+- **Your game list, your way.** Favourites, hidden mods, sort by name / recently played / most played, launch options, and custom cover art and colours per mod.
+- **Achievements (F8).** 40 of them, including a secret one for every easter egg, shown as ??? with a vague hint until found. Unlocks pop up with your pick of sound: FNF, Xbox 360, Steam, PS3 or Newgrounds.
 - **Collection lists.** Export your whole library as a `.txt` of download links, then import it on another PC or share it with a friend to install everything in one go.
 - **GameBanana integration.**
   - Every game is matched to its GameBanana page automatically, and that page's art becomes the menu background. You can pick the right page by hand if the guess is wrong.
@@ -160,6 +162,8 @@ Also, don't leave the menu alone for an hour. It gets lonely.
 
 ## Development
 
+> **Want to work on it?** [DEVELOPERS.md](DEVELOPERS.md) explains every script, how it's all put together, how to test and how to release.
+
 Clone it with `git clone https://github.com/QueenMoRi1/FNF-Launcher.git`, then open the folder in Godot 4.7 or run it directly:
 
 ```sh
@@ -202,6 +206,7 @@ bash tools/build_installer.sh    # -> dist/FNF-Launcher-Installer.sh
 | `scripts/music.gd` | Jukebox autoload |
 | `scripts/chart.gd`, `chart_viewer.gd`, `shaders/` | Chart reading, and the chart viewer and its visualizer |
 | `scripts/achievements.gd` | Achievements autoload: the list, unlocking, saving, the toast and the unlock sounds |
+| `scripts/themes/` | Custom themes: `theme.txt` reading/writing, applying a theme, and the theme editor |
 | `scripts/scores.gd` | Reads high scores from mods' save files (Haxe-serialized `.sol`) for the leaderboard |
 | `scripts/discord.gd`, `tools/discord_rpc.py` | Discord Rich Presence bridge (Python standard library only) |
 | `scripts/cheats.gd`, `scripts/xp_popup.gd` | Easter eggs |

@@ -1,0 +1,19 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Starry Night
+author: orang entertainment
+based on: freeplay
+accent: #ffe37a
+text: #f0f4ff
+panel: #0c1238 90%
+button: #18215a
+button focus: #3a4fc9
+background gradient: #050824 #1b2a6b
+background pattern: stars.png
+pattern size: 160
+pattern opacity: 60%
+particles: stars
+particles amount: 80%
+arrow colors: #ffe37a #8ab4ff #b8f0ff #ffb0e0
+visualizer colors: #ffe37a #8ab4ff
+mod art: off
+quips: quips.txt

@@ -1,0 +1,20 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: High Contrast
+author: orang entertainment
+based on: steam
+accent: #ffff00
+text: #ffffff
+panel: #000000 100%
+button: #000000
+button focus: #0000ff
+background color: #000000
+ui scale: 125%
+viewer kaleidoscope: off
+viewer shake: off
+viewer ribbons: off
+viewer effects: 0%
+arrow colors: #ff00ff #00ffff #00ff00 #ff0000
+achievement color: #000000 100%
+mod art: off
+cursor: cursor.png
+cursor hotspot: 2 2

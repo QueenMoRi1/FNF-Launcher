@@ -1,6 +1,6 @@
 extends CanvasLayer
 ## Global cheat codes (autoload "Cheats"). Type "fafa", "deltarune",
-## "gooseworx", "jim" or "compost" anywhere. "JIM" in caps plays the video.
+## "gooseworx", "jim", "compost", "artificial" or "chromatics" anywhere. "JIM" in caps plays the video.
 
 const ORANGE := "res://assets/orang/orange.webp"
 const BOOM := "res://assets/orang/vine_boom.mp3"
@@ -11,6 +11,16 @@ const NO_MORE_TEARS := "res://assets/orang/no_more_tears.ogv"
 const COMPOST_VIDEO := "res://assets/compost/compost.ogv"
 const JIM_VIDEO := "res://assets/jim/jim.ogv"
 const JIM := {"title": "I'm Jim and I Live in the Bin", "game": "Caddicarus", "path": "res://assets/jim/jim.ogg"}
+
+const AI_NOTE := """hey. real talk for a sec.
+
+FNF Launcher was vibecoded with the help of an AI called Claude. But I (Joey) put a lot of my own effort and code into it too: the ideas, the testing, the fixing, and the orang. So please don't hate my software.
+
+AI is a tool. It's not a replacement for creativity.
+
+Thank you for using my software.
+
+- Joey"""
 
 var typed := ""
 ## What was typed with its original capitals (typed is lowercased).
@@ -25,10 +35,15 @@ func _ready() -> void:
 
 func _input(event: InputEvent) -> void:
 	var key := event as InputEventKey
+	# Any key closes the "ai:" note once it has finished typing out.
+	if has_meta("ai_note") and key and key.pressed and not key.echo:
+		get_viewport().set_input_as_handled()
+		_close_ai_note(get_meta("ai_note"))
+		return
 	if key == null or not key.pressed or key.echo or key.unicode == 0:
 		return
-	if get_viewport().gui_get_focus_owner() is LineEdit:
-		return
+	if get_viewport().gui_get_focus_owner() is LineEdit or active:
+		return # (while an egg is open, e.g. playing "jim" on the chromatics piano)
 	typed_raw = (typed_raw + char(key.unicode)).right(32) # long enough for the longest code
 	typed = typed_raw.to_lower()
 	if typed.ends_with("fafa"):
@@ -47,6 +62,14 @@ func _input(event: InputEvent) -> void:
 		typed_raw = ""
 		typed = ""
 		Achievements.unlock("cope")
+	elif typed.ends_with("chromatics"):
+		typed_raw = ""
+		typed = ""
+		chromatics()
+	elif typed.ends_with("artificial"):
+		typed_raw = ""
+		typed = ""
+		ai_note()
 	elif typed.ends_with("compost"):
 		typed_raw = ""
 		typed = ""
@@ -68,6 +91,10 @@ func run_code(text: String) -> void:
 			gooseworx()
 		"compost":
 			compost()
+		"artificial":
+			ai_note()
+		"chromatics":
+			chromatics()
 		"yearofthelinuxdesktop":
 			Achievements.unlock("cope")
 		"jim":
@@ -209,6 +236,74 @@ func jim(loud := false) -> void:
 		_play_video(JIM_VIDEO)
 	else:
 		Music.play_now(JIM)
+
+
+## "ai:" - a note from Joey about how FNF Launcher was made.
+func ai_note() -> void:
+	if active:
+		return
+	active = true
+	Achievements.unlock("ai")
+	Music.player.stream_paused = true
+	var root := ColorRect.new()
+	root.color = Color.BLACK
+	root.mouse_filter = Control.MOUSE_FILTER_STOP
+	root.modulate.a = 0.0
+	add_child(root)
+	root.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	var label := Label.new()
+	label.text = AI_NOTE
+	label.autowrap_mode = TextServer.AUTOWRAP_WORD_SMART
+	label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
+	label.add_theme_font_override("font", load(FONT))
+	label.add_theme_font_size_override("font_size", 30)
+	label.visible_characters = 0
+	root.add_child(label)
+	label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+	label.offset_left = 140
+	label.offset_right = -140
+	var hint := Label.new()
+	hint.text = "press any key"
+	hint.add_theme_font_override("font", load(FONT))
+	hint.add_theme_font_size_override("font_size", 18)
+	hint.add_theme_color_override("font_color", Color(1, 1, 1, 0.45))
+	hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	hint.modulate.a = 0.0
+	root.add_child(hint)
+	hint.set_anchors_and_offsets_preset(Control.PRESET_BOTTOM_WIDE)
+	hint.offset_top = -60
+	hint.offset_bottom = -30
+	var tw := create_tween()
+	tw.tween_property(root, "modulate:a", 1.0, 0.6)
+	tw.tween_property(label, "visible_characters", AI_NOTE.length(), AI_NOTE.length() * 0.025)
+	tw.tween_property(hint, "modulate:a", 1.0, 0.5)
+	tw.tween_callback(func(): root.set_meta("closable", true))
+	root.gui_input.connect(func(e: InputEvent):
+		if e is InputEventMouseButton and e.pressed:
+			_close_ai_note(root))
+	set_meta("ai_note", root)
+
+
+func _close_ai_note(root: Control) -> void:
+	if not root.has_meta("closable") or root.has_meta("closing"):
+		return
+	root.set_meta("closing", true)
+	remove_meta("ai_note")
+	var tw := create_tween()
+	tw.tween_property(root, "modulate:a", 0.0, 0.5)
+	tw.tween_callback(_end.bind(root))
+	tw.tween_callback(Music.set_game_running.bind(Music.game_running))
+
+
+## A piano sung by Boyfriend (see Chromatics).
+func chromatics() -> void:
+	if active:
+		return
+	active = true
+	var piano := Chromatics.new()
+	piano.closed.connect(func(): active = false)
+	add_child(piano)
 
 
 ## Hi, I'm Compost.

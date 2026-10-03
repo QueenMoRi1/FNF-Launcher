@@ -1,0 +1,19 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Lava
+author: orang entertainment
+based on: blades
+accent: #ffcc33
+text: #fff2e0
+panel: #2a0800 90%
+button: #4a1200
+button focus: #ff4d00
+background gradient: #1a0000 #8a1a00
+particles: embers
+particles amount: 160%
+arrow colors: #ff3300 #ff9900 #ffcc33 #ff0055
+visualizer colors: #ff4d00 #ffcc33
+viewer effects: 150%
+season: july, august
+mod art: off
+font: Bungee-Regular.ttf
+quips: quips.txt

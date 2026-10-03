@@ -1,0 +1,23 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Cyber Grid
+author: orang entertainment
+based on: blades
+accent: #00ffcc
+text: #d8fff6
+panel: #00141a 88%
+button: #00262e
+button focus: #008a7a
+background gradient: #000a10 #002a3a
+background pattern: grid.png
+pattern size: 80
+pattern opacity: 45%
+particles: rain
+particles color: #00ffcc 35%
+arrow colors: #ff00aa #00ffcc #aaff00 #ffaa00
+visualizer colors: #00ffcc #ff00aa
+viewer effects: 160%
+mod art: off
+font: Orbitron.ttf
+quips: quips.txt
+cursor: cursor.png
+cursor hotspot: 2 2

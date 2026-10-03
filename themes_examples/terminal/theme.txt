@@ -1,0 +1,27 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Terminal
+author: orang entertainment
+based on: steam
+accent: #33ff66
+text: #33ff66
+panel: #001100 94%
+button: #001a00
+button focus: #0b5d1e
+background color: #000800
+background pattern: scanlines.png
+pattern size: 8
+pattern opacity: 60%
+particles: rain
+particles color: #33ff66 40%
+arrow colors: #33ff66 #33ff66 #33ff66 #33ff66
+visualizer colors: #33ff66
+viewer kaleidoscope: off
+intro credit: user@fnf | ~$ ./funk
+intro title: sudo | apt | funkin
+achievement color: #001100 96%
+achievement position: bottom right
+mod art: off
+font: VT323-Regular.ttf
+quips: quips.txt
+cursor: cursor.png
+cursor hotspot: 2 2

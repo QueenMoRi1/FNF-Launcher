@@ -1,0 +1,5 @@
+sudo funk | permission granted
+segmentation fault | core dumped
+rm -rf boredom | done
+it works | on my machine
+year of the | linux desktop

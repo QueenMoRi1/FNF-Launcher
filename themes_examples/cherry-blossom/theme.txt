@@ -1,0 +1,18 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Cherry Blossom
+author: orang entertainment
+based on: freeplay
+accent: #ff7aa8
+text: #4a1c2e
+panel: #fff0f5 92%
+button: #ffd6e5
+button focus: #ff9cc0
+background gradient: #ffe6f0 #ffc2d9
+particles: petals
+particles amount: 130%
+arrow colors: #ff7aa8 #9ad0ff #a8e6a1 #ffb36b
+visualizer colors: #ff7aa8 #ffd6e5
+season: march, april
+mod art: off
+font: Pacifico-Regular.ttf
+quips: quips.txt

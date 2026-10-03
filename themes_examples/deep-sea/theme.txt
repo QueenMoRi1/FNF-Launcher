@@ -1,0 +1,18 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Deep Sea
+author: orang entertainment
+based on: steam
+accent: #3ff2d0
+text: #d6fbff
+panel: #021a2a 90%
+button: #04304a
+button focus: #0b7aa0
+background gradient: #00121f #003a52
+background pattern: waves.png
+pattern size: 120
+pattern opacity: 25%
+particles: bubbles
+arrow colors: #3ff2d0 #3fa8f2 #7af23f #f2763f
+visualizer colors: #3ff2d0 #3fa8f2
+mod art: off
+quips: quips.txt

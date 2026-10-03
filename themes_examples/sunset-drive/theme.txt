@@ -1,0 +1,19 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Sunset Drive
+author: orang entertainment
+based on: freeplay
+accent: #ffb347
+text: #fff0f8
+panel: #2a0a3a 88%
+button: #4a1460
+button focus: #ff4f8a
+background gradient: #2b0f54 #ff6a3d
+background pattern: horizon.png
+pattern size: 200
+pattern opacity: 50%
+arrow colors: #ff4f8a #6ad8ff #ffd23f #ff6a3d
+visualizer colors: #ff4f8a #ffb347 #6ad8ff
+intro title: night | drive | funk
+mod art: off
+font: Monoton-Regular.ttf
+quips: quips.txt

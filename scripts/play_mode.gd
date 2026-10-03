@@ -1,7 +1,9 @@
 class_name PlayMode
 extends RefCounted
 ## Scoring for the chart viewer's secret play mode (hold M for 5 seconds):
-## you play BF's side with D F J K. Judging uses Psych Engine's defaults.
+## you play BF's side (or the opponent's) with D F J K. Judging uses Psych
+## Engine's defaults. At other song speeds the windows scale with it, so they
+## feel the same in real time.
 
 ## [window ms, popup text, points, accuracy weight]
 const RATINGS := [[45.0, "SICK!!", 350, 1.0], [90.0, "GOOD", 200, 0.67], [135.0, "BAD", 100, 0.34], [166.0, "SHIT", 50, 0.0]]
@@ -9,7 +11,10 @@ const MISS_WINDOW := 166.0
 
 ## chart note index -> 0 waiting, 1 hit, 2 missed (player notes only)
 var state := {}
-var player: Array[int] = [] # chart note indices of BF's notes, in time order
+var player: Array[int] = [] # chart note indices of your notes, in time order
+var side := 1 # 1 = BF, 0 = opponent
+var rate := 1.0 # song speed
+var win := 1.0 # timing windows are this many chart ms per real ms
 var score := 0
 var misses := 0
 var combo := 0
@@ -20,11 +25,14 @@ var last_end := 0.0
 var _notes: Array
 
 
-func _init(chart_notes: Array) -> void:
+func _init(chart_notes: Array, play_side := 1, song_rate := 1.0) -> void:
 	_notes = chart_notes
+	side = play_side
+	rate = song_rate
+	win = song_rate
 	for i in chart_notes.size():
 		var n: Array = chart_notes[i]
-		if n[1] == 1:
+		if n[1] == side:
 			player.append(i)
 			state[i] = 0
 			last_end = maxf(last_end, n[0] + n[3])
@@ -42,15 +50,15 @@ func press(lane: int, t: float) -> Array:
 		if state[i] != 0 or _notes[i][2] != lane:
 			continue
 		var n: Array = _notes[i]
-		if absf(n[0] - t) <= MISS_WINDOW:
+		if absf(n[0] - t) <= MISS_WINDOW * win:
 			best = i
 			break # player is in time order: the first one in the window is the earliest
-		if n[0] > t + MISS_WINDOW:
+		if n[0] > t + MISS_WINDOW * win:
 			break
 	if best < 0:
 		return ["", -1]
 	state[best] = 1
-	var diff := absf(_notes[best][0] - t)
+	var diff := absf(_notes[best][0] - t) / win
 	var text := ""
 	for r in RATINGS:
 		if diff <= r[0]:
@@ -68,7 +76,7 @@ func press(lane: int, t: float) -> Array:
 func check_misses(now: float) -> int:
 	var count := 0
 	for i in player:
-		if _notes[i][0] >= now - MISS_WINDOW:
+		if _notes[i][0] >= now - MISS_WINDOW * win:
 			break
 		if state[i] == 0:
 			_miss(i)

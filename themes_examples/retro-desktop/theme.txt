@@ -1,0 +1,18 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Retro Desktop
+author: orang entertainment
+based on: steam
+accent: #000080
+text: #000000
+panel: #c0c0c0 100%
+button: #c0c0c0
+button focus: #000080
+background color: #008080
+achievement color: #c0c0c0 100%
+achievement position: bottom right
+viewer kaleidoscope: off
+mod art: off
+font: VT323-Regular.ttf
+quips: quips.txt
+cursor: cursor.png
+cursor hotspot: 2 2

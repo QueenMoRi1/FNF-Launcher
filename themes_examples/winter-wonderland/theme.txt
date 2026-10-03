@@ -1,0 +1,18 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Winter Wonderland
+author: orang entertainment
+based on: freeplay
+accent: #bfe9ff
+text: #ffffff
+panel: #183a5a 88%
+button: #24527a
+button focus: #5fb8ff
+background gradient: #0d2340 #5c8fbf
+particles: snow
+particles amount: 150%
+arrow colors: #c9e8ff #7fd3ff #e8f6ff #a0c4ff
+visualizer colors: #bfe9ff #ffffff
+season: december, january
+mod art: off
+font: Lobster-Regular.ttf
+quips: quips.txt

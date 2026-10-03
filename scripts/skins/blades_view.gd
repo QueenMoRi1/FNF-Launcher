@@ -44,16 +44,18 @@ func _build(empty_hint: String) -> void:
 	bg.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
 	add_child(bg)
 	bg.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	background_nodes = [base, bg]
 	_load_background()
 
-	_build_tabs()
-	var header := UiKit.add_label(self, "games", 46, Color.WHITE)
+	_build_tabs(_group("tabs"))
+	var head := _group("header")
+	var header := UiKit.add_label(head, "games", 46, Color.WHITE)
 	header.autowrap_mode = TextServer.AUTOWRAP_OFF
 	header.add_theme_font_override("font", _font(300))
 	header.add_theme_color_override("font_shadow_color", Color(0, 0, 0, 0.45))
 	header.add_theme_constant_override("shadow_offset_y", 2)
 	header.position = Vector2(LIST.position.x + 6, 52)
-	var sub := UiKit.add_label(self, "fnf mods", 20, Color(1, 1, 1, 0.8))
+	var sub := UiKit.add_label(head, "fnf mods", 20, Color(1, 1, 1, 0.8))
 	sub.autowrap_mode = TextServer.AUTOWRAP_OFF
 	sub.add_theme_font_override("font", _font(400))
 	sub.position = Vector2(LIST.position.x + 6 + header.get_minimum_size().x + 14, 72)
@@ -63,7 +65,7 @@ func _build(empty_hint: String) -> void:
 	panel.add_theme_stylebox_override("panel", _panel_style(Color(1, 1, 1, 0.88), 10))
 	panel.position = LIST.position
 	panel.size = LIST.size
-	add_child(panel)
+	_group("list").add_child(panel)
 	var gloss := TextureRect.new()
 	gloss.texture = _gradient(Color(1, 1, 1, 0.55), Color(1, 1, 1, 0.0))
 	gloss.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
@@ -89,7 +91,8 @@ func _build(empty_hint: String) -> void:
 	frame.add_theme_stylebox_override("panel", _panel_style(Color(1, 1, 1, 0.92), 8))
 	frame.position = Vector2(LIST.end.x + 40, LIST.position.y + 40)
 	frame.size = Vector2(500, 290)
-	add_child(frame)
+	var details := _group("details")
+	details.add_child(frame)
 	art = TextureRect.new()
 	art.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	art.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_COVERED
@@ -97,7 +100,7 @@ func _build(empty_hint: String) -> void:
 	art.position = Vector2(8, 8)
 	art.size = frame.size - Vector2(16, 16)
 	frame.add_child(art)
-	title_label = UiKit.add_label(self, "", 30, Color.WHITE)
+	title_label = UiKit.add_label(details, "", 30, Color.WHITE)
 	title_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	title_label.text_overrun_behavior = TextServer.OVERRUN_TRIM_ELLIPSIS
 	title_label.add_theme_font_override("font", _font(600))
@@ -105,7 +108,7 @@ func _build(empty_hint: String) -> void:
 	title_label.add_theme_constant_override("shadow_offset_y", 2)
 	title_label.position = frame.position + Vector2(4, frame.size.y + 16)
 	title_label.size = Vector2(frame.size.x, 44)
-	info_label = UiKit.add_label(self, "", 20, Color(1, 1, 1, 0.85))
+	info_label = UiKit.add_label(details, "", 20, Color(1, 1, 1, 0.85))
 	info_label.autowrap_mode = TextServer.AUTOWRAP_OFF
 	info_label.add_theme_font_override("font", _font(400))
 	info_label.position = title_label.position + Vector2(0, 46)
@@ -238,7 +241,7 @@ func _make_row(item: Dictionary) -> Control:
 
 
 ## The blades: stacked tabs on the left edge, the active one brightest.
-func _build_tabs() -> void:
+func _build_tabs(holder: Control) -> void:
 	for i in TABS.size():
 		var on := i == ACTIVE_TAB
 		var tab := Panel.new()
@@ -247,7 +250,7 @@ func _build_tabs() -> void:
 		tab.position = Vector2(14 + i * 18, 128 + absi(i - ACTIVE_TAB) * 10)
 		tab.size = Vector2(44, 500 - absi(i - ACTIVE_TAB) * 20)
 		tab.z_index = -1 if not on else 0
-		add_child(tab)
+		holder.add_child(tab)
 		var label := UiKit.add_label(tab, TABS[i], 18, GREEN_DARK if on else Color(1, 1, 1, 0.9))
 		label.autowrap_mode = TextServer.AUTOWRAP_OFF
 		label.add_theme_font_override("font", _font(600 if on else 400))
@@ -255,7 +258,7 @@ func _build_tabs() -> void:
 		label.rotation = -PI / 2.0
 		label.position = Vector2(10, tab.size.y - 20)
 	# Only the active blade's label should read clearly over the stack.
-	move_child(get_child(get_child_count() - TABS.size() + ACTIVE_TAB), get_child_count() - 1)
+	holder.move_child(holder.get_child(ACTIVE_TAB), -1)
 
 
 func _load_background() -> void:

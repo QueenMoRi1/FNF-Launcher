@@ -1,0 +1,14 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Golden Hour
+author: orang entertainment
+based on: freeplay
+accent: #fff2b0
+text: #3a1e00
+panel: #fff2d8 90%
+button: #ffd890
+button focus: #ff9a3a
+background gradient: #ffcf6b #ff7a3a
+particles: fireflies
+particles color: #fff6c8
+mod art: off
+quips: quips.txt

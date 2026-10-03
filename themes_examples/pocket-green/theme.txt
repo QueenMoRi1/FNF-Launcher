@@ -1,0 +1,23 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Pocket Green
+author: orang entertainment
+based on: freeplay
+accent: #0f380f
+text: #0f380f
+panel: #9bbc0f 96%
+button: #8bac0f
+button focus: #306230
+background color: #9bbc0f
+background pattern: pixels.png
+pattern size: 64
+pattern opacity: 25%
+arrow colors: #0f380f #306230 #306230 #0f380f
+visualizer colors: #306230
+viewer kaleidoscope: off
+viewer shake: off
+achievement color: #8bac0f 96%
+mod art: off
+font: PressStart2P-Regular.ttf
+quips: quips.txt
+cursor: cursor.png
+cursor hotspot: 2 2

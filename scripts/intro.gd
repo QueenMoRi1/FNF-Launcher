@@ -7,6 +7,11 @@ const LINE_HEIGHT := 70.0
 const MAX_LINE_WIDTH := 1180.0
 
 var quip: Array = Quips.pick()
+## The theme's own intro bits (credits, quips, logo, title words), if any.
+var th: CustomTheme
+var credit := ["made by", "orang entertainment"]
+var credit2 := ["borrowing assets", "the fnf idiots"]
+var title := ["friday", "night", "funkin"]
 var last_beat := 0
 var lines: VBoxContainer
 var orange: TextureRect
@@ -16,6 +21,23 @@ var done := false
 func _ready() -> void:
 	InputSetup.apply()
 	theme = UiKit.make_theme()
+	th = CustomTheme.by_id(CustomTheme.session_id(Library.new().settings))
+	if th:
+		th.style(theme)
+		Music.menu_override = th.file("menu music")
+		if not th.quips().is_empty():
+			quip = th.quips().pick_random()
+		if th.pair("intro credit").size() == 2:
+			credit = th.pair("intro credit")
+		if th.pair("intro credit 2").size() == 2:
+			credit2 = th.pair("intro credit 2")
+		var words := str(th.values.get("intro title", "")).split("|")
+		if words.size() == 3:
+			title = Array(words).map(func(w): return w.strip_edges().to_lower())
+		if str(th.values.get("intro", "")).to_lower() == "skip":
+			Music.play_menu_theme()
+			_finish()
+			return
 	var bg := ColorRect.new()
 	bg.color = Color.BLACK
 	add_child(bg)
@@ -29,7 +51,9 @@ func _ready() -> void:
 	lines.offset_top = 200
 
 	orange = TextureRect.new()
-	orange.texture = load(ORANGE)
+	var logo_path := th.file("intro logo") if th else ""
+	var logo_img := Image.load_from_file(logo_path) if logo_path != "" else null
+	orange.texture = ImageTexture.create_from_image(logo_img) if logo_img else load(ORANGE)
 	orange.texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	orange.expand_mode = TextureRect.EXPAND_IGNORE_SIZE
 	orange.stretch_mode = TextureRect.STRETCH_KEEP_ASPECT_CENTERED
@@ -66,16 +90,16 @@ func _input(event: InputEvent) -> void:
 func _beat_hit(beat: int) -> void:
 	match beat:
 		1:
-			_set_text(["made by"])
+			_set_text([credit[0]])
 		3:
-			_add_text("orang entertainment")
+			_add_text(credit[1])
 			_show_orange()
 		4:
 			_clear()
 		5:
-			_set_text(["borrowing assets", "from"])
+			_set_text([credit2[0]] + (["from"] if credit2 == ["borrowing assets", "the fnf idiots"] else []))
 		7:
-			_add_text("the fnf idiots")
+			_add_text(credit2[1])
 		8:
 			_clear()
 		9:
@@ -85,11 +109,11 @@ func _beat_hit(beat: int) -> void:
 		12:
 			_clear()
 		13:
-			_add_text("friday")
+			_add_text(title[0])
 		14:
-			_add_text("nigth" if quip[0] == "trending" else "night")
+			_add_text("nigth" if quip[0] == "trending" and title[1] == "night" else title[1])
 		15:
-			_add_text("funkin")
+			_add_text(title[2])
 		16:
 			_finish()
 

@@ -1,0 +1,23 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Notebook
+author: orang entertainment
+based on: freeplay
+accent: #e0312f
+text: #1d2a4a
+panel: #fffdf2 95%
+button: #fff8d6
+button focus: #ffd84a
+background color: #fbf8ee
+background pattern: lines.png
+pattern size: 96
+arrow colors: #3a5bd9 #3a5bd9 #3a5bd9 #3a5bd9
+visualizer colors: #3a5bd9
+viewer kaleidoscope: off
+viewer ribbons: off
+viewer effects: 40%
+achievement color: #fff8d6 96%
+mod art: off
+font: PatrickHand-Regular.ttf
+quips: quips.txt
+cursor: cursor.png
+cursor hotspot: 2 2

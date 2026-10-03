@@ -1,0 +1,18 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Rainy Day
+author: orang entertainment
+based on: steam
+accent: #9cc3e6
+text: #e6eef6
+panel: #1c2430 90%
+button: #2a3646
+button focus: #4f6f94
+background gradient: #2a3442 #4c5a6a
+particles: rain
+particles amount: 120%
+arrow colors: #8fa8c8 #7fb3d5 #9fc5b0 #c8a8a8
+visualizer colors: #9cc3e6
+viewer shake: off
+viewer effects: 60%
+mod art: off
+quips: quips.txt

@@ -8,6 +8,7 @@ uniform float beat = 0.0;
 uniform float hue = 0.0;
 uniform float trip = 0.0;
 uniform float aspect = 1.777;
+uniform float ribbons = 1.0; // 0 turns the light ribbons off (custom themes)
 
 vec3 hsv(vec3 c) {
 	vec3 p = abs(fract(c.xxx + vec3(1.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0);
@@ -42,7 +43,7 @@ void fragment() {
 			+ (fi - 3.0) * 0.035;
 		float d = abs(p.y - y);
 		float glow = exp(-d * d * (1400.0 - 700.0 * bass)) * (0.35 + 0.4 * beat) + exp(-d * 55.0) * 0.07;
-		col += hsv(vec3(fract(hue + fi * 0.07 + 0.45), 0.45, 1.0)) * glow;
+		col += hsv(vec3(fract(hue + fi * 0.07 + 0.45), 0.45, 1.0)) * glow * ribbons;
 	}
 	// Drifting dust.
 	vec2 g = p * 22.0 + vec2(time * 0.6, time * 0.25);

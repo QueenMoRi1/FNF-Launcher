@@ -33,7 +33,8 @@ func get_mod(id: int) -> Dictionary:
 	return _parse(data)
 
 
-## Like get_mod, plus "files": [{file, size, url}] (the mod's downloads).
+## Like get_mod, plus "files": [{file, size, url, date}] (the mod's downloads;
+## date = when the file was uploaded, unix time).
 func get_mod_files(id: int) -> Dictionary:
 	var data = await _get_json("%s/Mod/%d?_csvProperties=_sName,_aPreviewMedia,_sProfileUrl,_aFiles" % [API, id])
 	if not (data is Dictionary and data.has("_sName")):
@@ -42,7 +43,8 @@ func get_mod_files(id: int) -> Dictionary:
 	var mod := _parse(data)
 	mod.files = []
 	for f in data.get("_aFiles", []):
-		mod.files.append({"file": f.get("_sFile", ""), "size": int(f.get("_nFilesize", 0)), "url": f.get("_sDownloadUrl", "")})
+		mod.files.append({"file": f.get("_sFile", ""), "size": int(f.get("_nFilesize", 0)), "url": f.get("_sDownloadUrl", ""),
+			"date": int(f.get("_tsDateAdded", 0))})
 	return mod
 
 

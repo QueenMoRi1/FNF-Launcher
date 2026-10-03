@@ -1,0 +1,11 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Midnight
+author: orang entertainment
+based on: steam
+accent: #8ab4ff
+text: #e8ecff
+panel: #10142e 94%
+button: #1c2350
+button focus: #3b4dbb
+background color: #0b0f2a
+mod art: on

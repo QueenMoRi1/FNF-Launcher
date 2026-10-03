@@ -6,3 +6,4 @@ dist/
 _demo/
 override.cfg
 __pycache__/
+CHANGELOG.md

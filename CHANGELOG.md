@@ -12,6 +12,130 @@ GitHub update channel get them, and stable-channel users get them in the next bu
 Bump with `bash tools/version.sh small` (or lesser / greater), add a section
 here, then run `bash tools/release.sh`.
 
+## v1.7.0 (2026-10-02)
+
+Mod tools, play mode upgrades and Funkin' Wrapped.
+
+- **Mod updates:** the launcher checks GameBanana for newer uploads of your
+  mods (twice a day, or on demand) and shows ⬆ UPDATE next to them. UPDATE NOW
+  swaps in the newest download, keeps your saves, and keeps the old version
+  in `.old/`.
+- **Save backups:** a mod's saves are backed up every time it starts (last 10
+  kept, duplicates skipped). Restore any of them from the edit dialog.
+- **Same keybinds everywhere:** pick your four note keys once (Settings >
+  KEYBINDS) and they're written into every Psych / Kade Engine mod's saved
+  controls before it starts. The save writer keeps every file byte for byte
+  identical apart from the keys (tested on every save on my machine).
+- **Health check:** finds the usual reasons a mod won't start (missing exe or
+  lime.ndll, wrong exe, wrong capitals in file names, missing Proton or
+  runtime, full disk...) in plain English, with fixes for some. Also guesses
+  the engine.
+- **Per-mod Proton & performance:** pick any installed Proton per mod
+  (GE-Proton, Valve Proton, Experimental), run it in gamescope with
+  fullscreen and an FPS limit, and set environment variables.
+- **Play mode:** after holding M, a setup card picks the side (BF or the
+  opponent), the speed (0.5x-2.0x) and the difficulty. Best runs are saved
+  and shown on the leaderboard (PLAY MODE BESTS).
+- **Funkin' Wrapped:** your year in FNF mods as a slideshow: time played, top
+  mods, jukebox songs on repeat, fun facts. Save any card as an image.
+- **Theme gallery:** share your custom themes and install other people's,
+  hosted on your friends server (update `server/worker.js` to get it).
+- **10 new achievements** (40 in all): Muscle Memory, Time Traveller,
+  Check-Up, Patch Notes, That's a Wrap, Window Shopping, and four secret ones
+  in play mode.
+- The edit dialog scrolls now, so it fits any screen.
+- Launching builds the command as a list, so names with spaces or quotes
+  can't break it. Launch options can quote part of a word (`VAR="a b"`).
+- Fixed: backup and Wrapped times were in UTC instead of your time zone.
+- Known issue: The Full-Ass Tricky Mod freezes on its "Done!" loading screen
+  under Proton (GE and Valve). Investigated, not fixed. Details in the devlog.
+
+## v1.6.0 (2026-10-02)
+
+Ultimate customizability.
+
+- **26 new example themes** (28 in all): Neon Arcade, Spooky Month, Notebook,
+  Terminal, Pocket Green, Sunset Drive, High Contrast, Winter Wonderland,
+  Cherry Blossom, Deep Sea, Lava, Rainy Day, Starry Night, Candy Shop, Autumn
+  Leaves, Valentine, Forest Camp, Blueprint, Retro Desktop, Bubblegum Pop,
+  Midnight Jazz, Monochrome, Ocean Breeze, Cyber Grid, Golden Hour and Party
+  Time. Their fonts are open-licensed (SIL OFL, licence included). New example
+  themes now arrive with updates, and deleted ones stay deleted.
+- **Animated backgrounds:** snow, bubbles, notes, stars, confetti, leaves,
+  petals, bats, hearts, rain, embers or fireflies, with colour, amount, speed
+  and size. Themes can also have a gradient background and pattern opacity.
+- **Themes can change the intro** (skip it, credits, title words, logo,
+  quips) **and the chart viewer** (arrow colours, visualizer colours,
+  kaleidoscope, beat shake, ribbons, effect strength).
+- **Themes can set** a mouse cursor, the achievement sound, popup position
+  and colour, the UI size, and a season.
+- **Theme mode:** pick yourself, random each launch, theme of the day, or
+  seasonal.
+- **Seasonal extras** for the plain skins (Settings, on by default): snow and
+  lights in December, confetti at New Year, bats in October, hearts for
+  Valentine's, green for St Patrick's, and an April Fools' gag.
+- **UI size** setting (80-150%).
+- **Game list:** favourites (★, always on top), hidden mods, sorting by name,
+  recently played or most played, launch options, and custom cover art and
+  name colour per mod.
+- **Theme editor:** controls for all of the above. It now always uses the
+  launcher's font, so wide theme fonts can't push it off screen. The "Darken"
+  label no longer squashes into one letter per line.
+- **Hint bar:** shrinks its text to fit when a theme's font is wide.
+- **New easter eggs:** `artificial` (a note from Joey) and `chromatics` (a piano
+  sung by Boyfriend, with his real voice from FunkinCrew's Tutorial vocals;
+  his sprite and voice are downloaded from FunkinCrew the first time). Two new
+  secret achievements, 30 in all.
+
+## v1.5.1 (2026-10-02)
+
+Bug fixes from a full sweep: every screen in every skin and theme.
+
+- Steam skin: long mod titles no longer run under the jukebox widget. The
+  title stops short of it at any screen width. This has been a bug since the
+  jukebox moved under the clock in v1.4.0.
+- Themes: text on buttons now picks black or white, whichever is readable,
+  when a theme sets button colours. Before, highlighted rows could be yellow
+  on orange (Orang Juice) or dark on blue (Midnight).
+- Orang Juice example theme: dropped the logo, which sat on top of the
+  Freeplay game list.
+
+## v1.5.0 (2026-10-02)
+
+Custom themes.
+
+Custom themes (new)
+- Themes are a folder in ~/.local/share/fnf-launcher/themes/ with a
+  plain "key: value" theme.txt and its files (scripts/themes/). They can set:
+  - colours: accent, text, popups, buttons, selected button, background
+  - a background image or .ogv video, a tiled pattern, and dimming
+  - mod art on or off
+  - a logo, a font, menu music (replaces Freaky Menu) and menu sounds
+  - the layout underneath: Freeplay, Steam or Xbox 360
+- Layout: move, resize or hide parts of the menu (game list/row, header,
+  clock, blades, art & details, jukebox, hint bar, version, logo). Shifts
+  are in % of the screen, so themes fit any resolution.
+- Theme editor (Settings > THEME > NEW / EDIT):
+  - colour pickers and file slots
+  - drag and drop files onto the window; it asks where they go if there's
+    more than one choice
+  - MOVE THINGS mode: drag to move, drag the corner or scroll to resize,
+    right-click to reset, tick boxes to hide
+  - every change saves and shows immediately
+- Sharing: EXPORT saves a .fnftheme (a zip). Drop one on the window, or use
+  IMPORT, to install it. Only theme files, images, fonts, sounds and .ogv
+  are taken, and nothing can be written outside the theme's folder.
+- Two example themes: Orang Juice and Midnight.
+- Skins now expose their movable parts and background layers (SkinView.parts,
+  background_nodes, mod_art_nodes) for themes.
+- New achievement: Interior Designer (open the theme editor). 28 in total.
+
+Achievement sounds
+- New unlock sound: Newgrounds, the medal chime FNF plays when you earn a
+  Newgrounds medal (NGFadeIn from FunkinCrew's assets, pinned to a commit).
+  Like the Xbox 360 and PS3 sounds, it's downloaded on first use and cached.
+- Downloaded sounds keep their own file type (.wav or .ogg).
+
 ## v1.4.1 (2026-10-01)
 
 Secret chart viewer play mode, an update notifier, and fixes.

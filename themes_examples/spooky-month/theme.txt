@@ -1,0 +1,21 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Spooky Month
+author: orang entertainment
+based on: freeplay
+accent: #ff8a1f
+text: #f6e7ff
+panel: #1a0b22 92%
+button: #2e1240
+button focus: #ff6a00
+background gradient: #12001c #3d0a2a
+particles: bats
+particles amount: 120%
+arrow colors: #8a2be2 #ff8a1f #4bd64b #d62b2b
+visualizer colors: #ff8a1f #8a2be2
+intro credit: spooky | month
+intro title: its | spooky | month
+achievement color: #2a0a1a 94%
+season: october
+mod art: off
+font: Creepster-Regular.ttf
+quips: quips.txt

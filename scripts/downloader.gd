@@ -28,7 +28,9 @@ var _last_emit := 0
 
 
 ## Queues a gamebanana.com/mods/<id> page or a direct https link to an archive.
-func add_url(url: String) -> void:
+## update_of: an installed game's folder, to replace it with this download
+## (the old version is kept in <games>/.old/).
+func add_url(url: String, update_of := "") -> void:
 	url = url.strip_edges()
 	var id := GameBanana.id_from_url(url)
 	if id < 0 and not url.begins_with("https://") and not url.begins_with("http://"):
@@ -36,6 +38,7 @@ func add_url(url: String) -> void:
 		return
 	var job := _new_job(url.get_file().uri_decode().get_basename() if id < 0 else "GameBanana mod %d" % id)
 	job.source = url
+	job.update_of = update_of
 	if id < 0:
 		job.url = url
 		job.state = "queued"
@@ -55,6 +58,7 @@ func add_url(url: String) -> void:
 	job.gb.erase("thumb_url")
 	if mod.files.size() == 1:
 		job.url = mod.files[0].url
+		job.gb.file_date = mod.files[0].date
 		job.state = "queued"
 		_pump()
 	else:
@@ -68,6 +72,7 @@ func choose(job_id: int, file: Dictionary) -> void:
 	var job := _find(job_id)
 	if job.get("state") == "choose":
 		job.url = file.url
+		job.gb.file_date = file.get("date", 0)
 		job.files = []
 		job.state = "queued"
 		_pump()
@@ -264,6 +269,18 @@ func _place(job: Dictionary, code: int) -> void:
 			_fail(job, "No game .exe inside that download.")
 		return
 	var dest := _unique_dest(job.name)
+	var update_of: String = job.get("update_of", "")
+	if update_of != "" and DirAccess.dir_exists_absolute(update_of):
+		# An update: the old version moves to .old/ (replacing an older backup).
+		var old := games_dir.path_join(".old").path_join(update_of.get_file())
+		DirAccess.make_dir_recursive_absolute(old.get_base_dir())
+		if DirAccess.dir_exists_absolute(old):
+			_remove_tree_in(old, games_dir.path_join(".old"))
+		if DirAccess.rename_absolute(update_of, old) != OK:
+			_fail(job, "Couldn't move the old version out of the way (is the game still running?).")
+			return
+		dest = update_of
+		job.gb.was_update = true
 	if DirAccess.rename_absolute(root, dest) != OK:
 		_fail(job, "Couldn't move the game into %s." % games_dir)
 		return
@@ -350,7 +367,12 @@ func _unique_dest(name: String) -> String:
 ## Recursive delete, restricted to the .downloads folder. Symlinks are removed,
 ## never followed.
 func _remove_tree(path: String) -> void:
-	if not path.begins_with(_downloads_dir() + "/"):
+	_remove_tree_in(path, _downloads_dir())
+
+
+## Recursive delete of `path`, which must be inside `allowed`.
+func _remove_tree_in(path: String, allowed: String) -> void:
+	if not path.begins_with(allowed + "/"):
 		return
 	var d := DirAccess.open(path)
 	if d == null:
@@ -363,5 +385,5 @@ func _remove_tree(path: String) -> void:
 		if d.is_link(child):
 			d.remove(sub)
 		else:
-			_remove_tree(child)
+			_remove_tree_in(child, allowed)
 	DirAccess.remove_absolute(path)

@@ -11,15 +11,17 @@ const SKINS := ["freeplay", "steam", "blades"]
 ## Unlock sounds you can pick in Settings. Xbox 360 and PS3 are downloaded on
 ## first use and cached (they're Microsoft's/Sony's, so they aren't shipped);
 ## Steam's is loaded from your Steam install.
-const SOUNDS := ["fnf", "xbox", "steam", "ps3"]
-const SOUND_NAMES := {"fnf": "FNF", "xbox": "XBOX 360", "steam": "STEAM", "ps3": "PS3"}
+const SOUNDS := ["fnf", "xbox", "steam", "ps3", "newgrounds"]
+const SOUND_NAMES := {"fnf": "FNF", "xbox": "XBOX 360", "steam": "STEAM", "ps3": "PS3", "newgrounds": "NEWGROUNDS"}
 const SOUND_URLS := {
 	# PCSX2's original achievement sound (the Xbox 360 one), before they swapped it out.
 	"xbox": "https://raw.githubusercontent.com/PCSX2/pcsx2/0419de4bafb9381a4866d5c43ab95d730ddf15aa/bin/resources/sounds/achievements/unlock.wav",
 	# The PS3 trophy sound, ripped from the console (from a PCSX2 pull request).
 	"ps3": "https://raw.githubusercontent.com/PCSX2/pcsx2/b76245ea13f46deb4d46db4b6848a6c7c67ab3f9/bin/resources/sounds/achievements/unlock.wav",
+	# The Newgrounds medal chime FNF plays when you earn a medal (FunkinCrew's assets).
+	"newgrounds": "https://raw.githubusercontent.com/FunkinCrew/Funkin.assets/3793b0582786329d6dda41b8ac51395eedee23b5/preload/sounds/NGFadeIn.ogg",
 }
-const SOUND_CACHE := "user://achievement_sounds/%s.wav"
+const SOUND_CACHE := "user://achievement_sounds/%s"
 const FNF_SOUND := "res://assets/funkin/confirmMenu.ogg"
 const STEAM_SOUND := "steamui/sounds/deck_ui_achievement_toast.wav"
 ## id -> [title, description, hint shown while locked ("" = show the description)]
@@ -41,6 +43,13 @@ const LIST := {
 	"million": ["Millionaire", "Reach a total score of 1,000,000 in one mod.", ""],
 	"friends": ["Social Butterfly", "Open the friends page.", ""],
 	"share": ["Sharing Is Caring", "Export a collection.", ""],
+	"theme": ["Interior Designer", "Open the theme editor.", ""],
+	"keybinds": ["Muscle Memory", "Turn on the same keybinds for every mod.", ""],
+	"restore": ["Time Traveller", "Restore a save backup.", ""],
+	"health": ["Check-Up", "Run a mod health check.", ""],
+	"mod_update": ["Patch Notes", "Update a mod from GameBanana.", ""],
+	"wrapped": ["That's a Wrap", "Open Funkin' Wrapped.", ""],
+	"gallery": ["Window Shopping", "Install a theme from the gallery.", ""],
 	# Easter eggs (secret)
 	"fafa": ["You Were Warned", "Typed the forbidden word.", "Some words should never be typed."],
 	"deltarune": ["Dark World", "Called out a certain RPG by name.", "A darker world is waiting to be named."],
@@ -52,6 +61,12 @@ const LIST := {
 	"maybe": ["Make Up Your Mind", "Couldn't decide.", "Sometimes the answer is somewhere in between."],
 	"kill": ["Chose Violence", "Picked the worst possible answer.", "There's always a worse answer."],
 	"jukebox_game": ["Off the Clock", "Played along in the chart viewer.", "Hold onto the music a little longer than usual."],
+	"ai": ["Behind the Scenes", "Read Joey's note about how this was made.", "Some intelligence is less natural than others."],
+	"chromatics": ["Perfect Pitch", "Played Boyfriend like a piano.", "Some words are more colourful than others."],
+	"fc": ["No Misses", "Full combo a song in play mode.", "Hold onto the music, then don't let go."],
+	"perfect": ["Sick!! Sick!! Sick!!", "Get a PERFECT rank in play mode.", "Every single note, right on time."],
+	"opponent": ["Role Reversal", "Clear a song as the opponent in play mode.", "Try the other side."],
+	"speed": ["Speed Demon", "Clear a song at 1.5x speed or faster in play mode.", "Faster. FASTER."],
 	"cope": ["Cope", "You're coping rn i totally owned u", "Surely this is the year. Surely."],
 	# The end
 	"all": ["Completionist", "Unlock every other achievement.", ""],
@@ -150,7 +165,7 @@ func set_sound(kind: String, done := Callable()) -> void:
 		return
 	data.sound = kind
 	_save()
-	if SOUND_URLS.has(kind) and not FileAccess.file_exists(SOUND_CACHE % kind):
+	if SOUND_URLS.has(kind) and not FileAccess.file_exists(_cache_path(kind)):
 		_download_sound(kind, done)
 		return
 	var ok := _load_sound()
@@ -170,10 +185,10 @@ func _load_sound() -> bool:
 				if FileAccess.file_exists(path):
 					stream = AudioStreamWAV.load_from_file(path)
 					break
-		"xbox", "ps3":
-			var path := ProjectSettings.globalize_path(SOUND_CACHE % kind)
+		"xbox", "ps3", "newgrounds":
+			var path := ProjectSettings.globalize_path(_cache_path(kind))
 			if FileAccess.file_exists(path):
-				stream = AudioStreamWAV.load_from_file(path)
+				stream = AudioStreamOggVorbis.load_from_file(path) if path.ends_with(".ogg") else AudioStreamWAV.load_from_file(path)
 	var ok := stream != null or kind == "fnf"
 	if stream == null:
 		stream = load(FNF_SOUND)
@@ -182,15 +197,20 @@ func _load_sound() -> bool:
 	return ok
 
 
+## Where a downloaded sound is kept: its name plus the file's own extension.
+func _cache_path(kind: String) -> String:
+	return SOUND_CACHE % (kind + "." + SOUND_URLS[kind].get_extension())
+
+
 func _download_sound(kind: String, done: Callable) -> void:
 	var http := HTTPRequest.new()
 	add_child(http)
 	http.request_completed.connect(func(result: int, code: int, _h, body: PackedByteArray):
 		http.queue_free()
-		var ok := result == HTTPRequest.RESULT_SUCCESS and code == 200 and body.size() > 44 and body.slice(0, 4).get_string_from_ascii() == "RIFF"
+		var ok := result == HTTPRequest.RESULT_SUCCESS and code == 200 and body.size() > 44 and body.slice(0, 4).get_string_from_ascii() in ["RIFF", "OggS"]
 		if ok:
-			DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path((SOUND_CACHE % kind).get_base_dir()))
-			var f := FileAccess.open(SOUND_CACHE % kind, FileAccess.WRITE)
+			DirAccess.make_dir_recursive_absolute(ProjectSettings.globalize_path(_cache_path(kind).get_base_dir()))
+			var f := FileAccess.open(_cache_path(kind), FileAccess.WRITE)
 			if f:
 				f.store_buffer(body)
 				f.close()
@@ -222,11 +242,28 @@ func _show_next() -> void:
 	var toast := _make_toast(LIST[id][0])
 	add_child(toast)
 	var view := get_viewport().get_visible_rect().size
-	# Top-centre: clear of the hint bar, popups' buttons and the jukebox.
-	var shown := Vector2((view.x - toast.size.x) / 2.0, 22.0)
-	toast.position = shown - Vector2(0, toast.size.y + 40.0)
+	# Top-centre by default (clear of the hint bar, popups' buttons and the
+	# jukebox); a custom theme can move it to any edge or corner.
+	var where := str(CustomTheme.current.values.get("achievement position", "top")).to_lower() if CustomTheme.current else "top"
+	var x := (view.x - toast.size.x) / 2.0
+	if where.contains("left"):
+		x = 22.0
+	elif where.contains("right"):
+		x = view.x - toast.size.x - 22.0
+	var from_bottom := where.begins_with("bottom")
+	var shown := Vector2(x, view.y - toast.size.y - 70.0 if from_bottom else 22.0)
+	toast.position = shown + Vector2(0, (toast.size.y + 40.0) * (1.0 if from_bottom else -1.0))
 	toast.modulate.a = 0.0
-	_chime.play()
+	var sound_file := CustomTheme.current.file("achievement sound") if CustomTheme.current else ""
+	var theme_sound: AudioStream = CustomTheme._audio(sound_file) if sound_file != "" else null
+	if theme_sound:
+		var p := AudioStreamPlayer.new()
+		p.stream = theme_sound
+		add_child(p)
+		p.finished.connect(p.queue_free)
+		p.play()
+	else:
+		_chime.play()
 	var tw := create_tween()
 	tw.set_parallel(true)
 	tw.tween_property(toast, "position", shown, 0.35).set_trans(Tween.TRANS_BACK).set_ease(Tween.EASE_OUT)
@@ -242,10 +279,11 @@ func _show_next() -> void:
 func _make_toast(title: String) -> PanelContainer:
 	var panel := PanelContainer.new()
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.08, 0.1, 0.94)
+	var t := CustomTheme.current
+	style.bg_color = t.color("achievement color", Color(0.08, 0.08, 0.1, 0.94)) if t else Color(0.08, 0.08, 0.1, 0.94)
 	style.set_corner_radius_all(40)
 	style.set_border_width_all(3)
-	style.border_color = Color("fdd835")
+	style.border_color = UiKit.accent if t else Color("fdd835")
 	style.content_margin_left = 14
 	style.content_margin_right = 34
 	style.content_margin_top = 10

@@ -1,0 +1,16 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Monochrome
+author: orang entertainment
+based on: steam
+accent: #ffffff
+text: #ffffff
+panel: #111111 94%
+button: #222222
+button focus: #555555
+background color: #000000
+background pattern: checker.png
+pattern size: 64
+pattern opacity: 8%
+arrow colors: #ffffff #bbbbbb #888888 #dddddd
+visualizer colors: #ffffff
+mod art: off

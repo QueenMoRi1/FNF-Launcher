@@ -1,0 +1,13 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Orang Juice
+author: orang entertainment
+based on: freeplay
+accent: #fff176
+text: white
+panel: #3a1500 90%
+button: #6b3200
+button focus: #ff6f00
+background color: #ff8c1a
+background pattern: orang.png
+pattern size: 70
+mod art: off

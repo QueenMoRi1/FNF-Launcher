@@ -1,0 +1,17 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Autumn Leaves
+author: orang entertainment
+based on: freeplay
+accent: #ffb347
+text: #fff4e6
+panel: #3a1a08 90%
+button: #5a2a0c
+button focus: #c8531a
+background gradient: #4a1e0a #b85a1e
+particles: leaves
+arrow colors: #c8531a #e0a030 #8a9a2a #a8321a
+visualizer colors: #ffb347 #c8531a
+season: september, november
+mod art: off
+font: Lobster-Regular.ttf
+quips: quips.txt

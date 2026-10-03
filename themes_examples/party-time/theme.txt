@@ -1,0 +1,19 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Party Time
+author: orang entertainment
+based on: blades
+accent: #ffe600
+text: #ffffff
+panel: #2a0050 88%
+button: #4a0a8a
+button focus: #ff2bd6
+background gradient: #3a0070 #ff2b7a
+particles: confetti
+particles amount: 150%
+arrow colors: #ff2bd6 #00e5ff #39ff14 #ffe600
+visualizer colors: rainbow
+viewer effects: 180%
+intro title: party | party | party
+mod art: off
+font: Bungee-Regular.ttf
+quips: quips.txt

@@ -1,0 +1,19 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Ocean Breeze
+author: orang entertainment
+based on: freeplay
+accent: #ffffff
+text: #0a3a4a
+panel: #e8fbff 92%
+button: #bff0f8
+button focus: #3fc8e0
+background gradient: #8fe8ff #2aa8d8
+background pattern: waves.png
+pattern size: 100
+pattern opacity: 35%
+particles: bubbles
+particles amount: 50%
+season: june, july, august
+mod art: off
+font: Pacifico-Regular.ttf
+quips: quips.txt

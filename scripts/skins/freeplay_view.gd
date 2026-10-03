@@ -32,10 +32,9 @@ func _build(empty_hint: String) -> void:
 	add_child(art)
 	art.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
 
-	list_root = Control.new()
-	list_root.mouse_filter = MOUSE_FILTER_IGNORE
-	add_child(list_root)
-	list_root.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	background_nodes = [bg]
+	mod_art_nodes = [art]
+	list_root = _group("list")
 	for item in items:
 		var row := _make_row(item)
 		list_root.add_child(row)

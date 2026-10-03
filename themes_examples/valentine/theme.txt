@@ -1,0 +1,21 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Valentine
+author: orang entertainment
+based on: freeplay
+accent: #ff4f7a
+text: #ffffff
+panel: #5a0a24 90%
+button: #8a1036
+button focus: #ff4f7a
+background gradient: #6a0a2a #ff7aa0
+background pattern: hearts.png
+pattern size: 100
+pattern opacity: 30%
+particles: hearts
+arrow colors: #ff4f7a #ff9ab8 #ffc2d4 #d6004a
+visualizer colors: #ff4f7a #ffc2d4
+intro credit: with love | from orang
+season: february
+mod art: off
+font: Pacifico-Regular.ttf
+quips: quips.txt

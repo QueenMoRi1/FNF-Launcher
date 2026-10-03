@@ -1,0 +1,16 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Forest Camp
+author: orang entertainment
+based on: steam
+accent: #ffd36b
+text: #eaf5df
+panel: #0f1f12 90%
+button: #1e3a22
+button focus: #3f7a3a
+background gradient: #071209 #1f3a1a
+particles: fireflies
+arrow colors: #8ac27a #ffd36b #5aa05a #c87a3a
+visualizer colors: #ffd36b #8ac27a
+season: june, july
+mod art: off
+quips: quips.txt

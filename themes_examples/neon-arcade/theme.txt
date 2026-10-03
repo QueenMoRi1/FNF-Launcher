@@ -1,0 +1,25 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Neon Arcade
+author: orang entertainment
+based on: freeplay
+accent: #ff2bd6
+text: #e9fbff
+panel: #0a0420 90%
+button: #1b0a3a
+button focus: #00e5ff
+background gradient: #0a0020 #3a0066
+background pattern: grid.png
+pattern size: 120
+pattern opacity: 40%
+particles: stars
+particles color: #00e5ff
+arrow colors: #ff2bd6 #00e5ff #39ff14 #ffea00
+visualizer colors: #ff2bd6 #00e5ff #39ff14
+viewer effects: 140%
+intro title: insert | coin | to funk
+achievement color: #12002a 94%
+mod art: off
+font: PressStart2P-Regular.ttf
+quips: quips.txt
+cursor: cursor.png
+cursor hotspot: 2 2

@@ -20,6 +20,8 @@ var game_running := false
 ## Set by the intro so the menu opens with a white flash.
 var intro_flash := false
 var _failures := 0
+## A custom theme's menu music (a file path), replacing Freaky Menu. "" = none.
+var menu_override := ""
 ## A one-off track from play_now() (not in the playlist), or empty.
 var special := {}
 
@@ -36,8 +38,7 @@ func current() -> Dictionary:
 
 
 func play_menu_theme() -> void:
-	var stream: AudioStreamOggVorbis = load(MENU_THEME)
-	stream.loop = true
+	var stream := _menu_stream(true)
 	tracks = [MENU_TRACK]
 	order = [0]
 	pos = 0
@@ -188,9 +189,7 @@ func load_stream(path: String) -> AudioStream:
 
 func _load(path: String) -> AudioStream:
 	if path == "":
-		var menu := (load(MENU_THEME) as AudioStreamOggVorbis).duplicate() as AudioStreamOggVorbis
-		menu.loop = false
-		return menu
+		return _menu_stream(false)
 	if path.begins_with("res://"):
 		return load(path)
 	if path.begins_with(AndroidApps.APK_SCHEME):
@@ -210,6 +209,26 @@ func _load(path: String) -> AudioStream:
 		"mp3":
 			return AudioStreamMP3.load_from_file(path)
 	return null
+
+
+## The menu theme: Freaky Menu, or a custom theme's menu music.
+func _menu_stream(looping: bool) -> AudioStream:
+	if menu_override != "" and FileAccess.file_exists(menu_override):
+		var custom: AudioStream = null
+		match menu_override.get_extension().to_lower():
+			"ogg":
+				custom = AudioStreamOggVorbis.load_from_file(menu_override)
+				if custom:
+					custom.loop = looping
+			"mp3":
+				custom = AudioStreamMP3.load_from_file(menu_override)
+				if custom:
+					custom.loop = looping
+		if custom:
+			return custom
+	var menu := (load(MENU_THEME) as AudioStreamOggVorbis).duplicate() as AudioStreamOggVorbis
+	menu.loop = looping
+	return menu
 
 
 static func _mp3(bytes: PackedByteArray) -> AudioStream:

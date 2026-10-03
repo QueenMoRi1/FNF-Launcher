@@ -1,0 +1,21 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Blueprint
+author: orang entertainment
+based on: steam
+accent: #ffffff
+text: #e6f0ff
+panel: #0a3a7a 90%
+button: #0d4a9a
+button focus: #2a7ae0
+background color: #0b4ea2
+background pattern: grid.png
+pattern size: 96
+pattern opacity: 50%
+arrow colors: #ffffff #cfe2ff #9fc5ff #ffffff
+visualizer colors: #ffffff
+viewer kaleidoscope: off
+mod art: off
+font: VT323-Regular.ttf
+quips: quips.txt
+cursor: cursor.png
+cursor hotspot: 2 2

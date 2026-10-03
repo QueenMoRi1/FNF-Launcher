@@ -17,6 +17,12 @@ var widget_top := 16.0
 var accent := UiKit.YELLOW
 var items: Array = []
 var selected := 0
+## Pieces a custom theme can move, scale or hide: id -> Control.
+var parts := {}
+## The skin's own background layers (hidden when a theme brings its own).
+var background_nodes: Array[Control] = []
+## Layers showing the selected mod's GameBanana art (a theme can turn them off).
+var mod_art_nodes: Array[Control] = []
 
 
 func _init() -> void:
@@ -41,6 +47,18 @@ func set_art(i: int, tex: Texture2D) -> void:
 		items[i].art = tex
 		if i == selected:
 			set_selected(selected, true)
+
+
+## A full-screen container for one movable piece of the skin (see `parts`).
+func _group(id: String) -> Control:
+	var c := Control.new()
+	c.name = id
+	c.mouse_filter = MOUSE_FILTER_IGNORE
+	c.set_meta("group", true)
+	add_child(c)
+	c.set_anchors_and_offsets_preset(PRESET_FULL_RECT)
+	parts[id] = c
+	return c
 
 
 ## Skins only draw; clicks and taps go to main.gd (which asks item_at()).

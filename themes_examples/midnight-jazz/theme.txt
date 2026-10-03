@@ -1,0 +1,20 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Midnight Jazz
+author: orang entertainment
+based on: steam
+accent: #e0b04a
+text: #f3ead8
+panel: #1a1410 92%
+button: #2a2018
+button focus: #7a5a2a
+background gradient: #0e0b08 #2a1e14
+particles: notes
+particles amount: 60%
+particles speed: 60%
+arrow colors: #e0b04a #b0703a #d8c08a #8a3a2a
+visualizer colors: #e0b04a
+viewer shake: off
+viewer effects: 50%
+mod art: off
+font: Lobster-Regular.ttf
+quips: quips.txt

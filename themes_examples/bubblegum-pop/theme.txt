@@ -1,0 +1,19 @@
+# FNF Launcher theme. Edit it here or in the launcher (Settings > THEME > EDIT).
+name: Bubblegum Pop
+author: orang entertainment
+based on: blades
+accent: #ff5cc8
+text: #ffffff
+panel: #7a2a8a 88%
+button: #a03ab0
+button focus: #ff5cc8
+background gradient: #ff9ae0 #8a5cff
+background pattern: dots.png
+pattern size: 70
+pattern opacity: 35%
+particles: bubbles
+particles color: #ffffff 70%
+arrow colors: #ff5cc8 #5cd6ff #b6ff5c #ffd65c
+mod art: off
+font: Bungee-Regular.ttf
+quips: quips.txt

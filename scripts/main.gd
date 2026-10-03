@@ -22,6 +22,11 @@ var view: SkinView
 
 var overlay: UiKit.Overlay
 var viewer: ChartViewer
+var active_theme: CustomTheme
+var theme_editor: ThemeEditor
+var theme_logo: TextureRect
+var hint_bar: ColorRect
+var version_label: Label
 var updater: Updater
 var _update_startup := true # still waiting to ask / check at startup
 var _update_manual := false # the check came from CHECK NOW
@@ -33,6 +38,7 @@ var hold_dir := 0
 var hold_time := 0.0
 var launching := false
 var game_pid := -1
+var playing_path := "" # the running game's folder
 var idle_time := 0.0
 var _was_blocked := false
 ## Widgets of the open downloads / friends overlay (freed with the overlay).
@@ -41,6 +47,10 @@ var downloads_label: Label
 var friends_list: VBoxContainer
 var friends_header: Label
 var _gb_busy := false
+var mod_updates := ModUpdates.new()
+## The running game's start time and the AppData snapshot (Windows save learning).
+var _session_start := 0
+var _save_snapshot := {}
 var _gb_again := false
 ## Android build: the library is the installed FNF apps, there's no Proton,
 ## downloads, friends or Discord, and the menu gets a touch action bar.
@@ -67,11 +77,18 @@ func _ready() -> void:
 	add_child(friends)
 	add_child(downloader)
 	downloader.gamebanana = gb
+	add_child(mod_updates)
+	mod_updates.gamebanana = gb
+	mod_updates.finished.connect(_on_mod_updates_checked)
 	downloader.changed.connect(_on_downloads_changed)
 	downloader.installed.connect(_on_game_installed)
 	downloader.job_failed.connect(_on_download_failed)
 	friends.updated.connect(_on_friends_updated)
 	_build_chrome()
+	if not android:
+		_install_example_themes()
+	get_window().files_dropped.connect(_on_files_dropped)
+	get_viewport().size_changed.connect(_relayout)
 	library.scan()
 	_sort_keys()
 	_apply_skin()
@@ -90,11 +107,14 @@ func _ready() -> void:
 		_show_proton_popup()
 		_setup_updater()
 	_load_gamebanana()
+	if not android and mod_updates.due(library.settings) and library.settings.get("mod_updates_auto", true):
+		mod_updates.check_all.call_deferred(library)
 
 
 ## Everything that stays the same across skins: hint bar, messages, timers, sfx.
 func _build_chrome() -> void:
 	var bar := ColorRect.new()
+	hint_bar = bar
 	bar.color = Color(0, 0, 0, 0.6)
 	add_child(bar)
 	bar.set_anchors_and_offsets_preset(PRESET_BOTTOM_WIDE)
@@ -130,6 +150,7 @@ func _build_chrome() -> void:
 	proton_label.vertical_alignment = VERTICAL_ALIGNMENT_CENTER
 
 	var version := UiKit.add_label(self, "v" + str(ProjectSettings.get_setting("application/config/version", "")), 14, Color(1, 1, 1, 0.6))
+	version_label = version
 	version.autowrap_mode = TextServer.AUTOWRAP_OFF
 	version.horizontal_alignment = HORIZONTAL_ALIGNMENT_RIGHT
 	version.set_anchors_and_offsets_preset(PRESET_BOTTOM_RIGHT)
@@ -181,6 +202,19 @@ func _update_hints() -> void:
 	if friends.is_configured() and not friends.online.is_empty():
 		text += "   ·   %d FRIEND%s ONLINE" % [friends.online.size(), "" if friends.online.size() == 1 else "S"]
 	hints_label.text = text
+	_fit_hints.call_deferred()
+
+
+## Wide theme fonts: shrink the hints until they clear the GE-Proton label.
+func _fit_hints() -> void:
+	if not hints_label or not proton_label:
+		return
+	var font := hints_label.get_theme_font("font")
+	var room := hint_bar.size.x - proton_label.get_minimum_size().x - hints_label.offset_left - 40.0
+	var fs := 16
+	while fs > 9 and font.get_string_size(hints_label.text, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x > room:
+		fs -= 1
+	hints_label.add_theme_font_size_override("font_size", fs)
 
 
 func _flash() -> void:
@@ -211,7 +245,12 @@ func _apply_skin(keep_path := "") -> void:
 		view.queue_free()
 	if android and library.settings.skin == "steam":
 		library.settings.skin = "freeplay" # the Steam skin is desktop-only
-	match library.settings.skin:
+	# A custom theme picks its own layout underneath.
+	active_theme = CustomTheme.by_id(CustomTheme.session_id(library.settings))
+	var skin: String = active_theme.base() if active_theme else library.settings.skin
+	if android and skin == "steam":
+		skin = "freeplay"
+	match skin:
 		"steam":
 			view = SteamView.new()
 		"blades":
@@ -224,11 +263,20 @@ func _apply_skin(keep_path := "") -> void:
 
 	UiKit.accent = view.accent
 	theme = view.make_theme()
+	if active_theme:
+		UiKit.accent = active_theme.color("accent", view.accent)
+		active_theme.style(theme)
 	Achievements.used_skin(library.settings.skin)
 	message_label.add_theme_color_override("font_color", UiKit.accent)
 	var streams := view.sounds()
 	for s in sfx:
-		sfx[s].stream = streams.get(s)
+		var custom: AudioStream = active_theme.sound(s) if active_theme else null
+		sfx[s].stream = custom if custom else streams.get(s)
+	var music: String = active_theme.file("menu music") if active_theme else ""
+	if music != Music.menu_override:
+		Music.menu_override = music
+		if Music.current().path == "" and Music.player.playing:
+			Music.play_menu_theme()
 
 	if now_playing:
 		now_playing.queue_free()
@@ -250,11 +298,40 @@ func _apply_skin(keep_path := "") -> void:
 	if android:
 		hint = "Install a Friday Night Funkin' app (APK),\nthen open Settings and press RESCAN APPS."
 	view.build(_items(), selected, hint)
+	ThemeRuntime.apply(active_theme, self)
+	if active_theme == null and library.settings.get("seasonal_extras", true):
+		SeasonalExtras.apply(self)
+	_relayout.call_deferred()
 
 
+## Puts the theme's layout (moved, resized and hidden parts) on screen.
+func _relayout() -> void:
+	if view:
+		ThemeRuntime.layout(active_theme, self)
+	_fit_hints()
+
+
+## Favourites first, then the chosen order (Settings > GAME LIST). Hidden mods
+## are left out unless SHOW HIDDEN is on.
 func _sort_keys() -> void:
-	keys = library.games.keys()
-	keys.sort_custom(func(a, b): return library.games[a].name.naturalnocasecmp_to(library.games[b].name) < 0)
+	var show_hidden: bool = library.settings.get("show_hidden", false)
+	keys = library.games.keys().filter(func(k): return show_hidden or not library.games[k].get("hidden", false))
+	var mode: String = library.settings.get("sort", "name")
+	keys.sort_custom(func(a, b):
+		var ea: Dictionary = library.games[a]
+		var eb: Dictionary = library.games[b]
+		var fa: bool = ea.get("favorite", false)
+		var fb: bool = eb.get("favorite", false)
+		if fa != fb:
+			return fa
+		match mode:
+			"recent":
+				if ea.get("last_played", 0) != eb.get("last_played", 0):
+					return ea.get("last_played", 0) > eb.get("last_played", 0)
+			"played":
+				if ea.get("plays", 0) != eb.get("plays", 0):
+					return ea.get("plays", 0) > eb.get("plays", 0)
+		return ea.name.naturalnocasecmp_to(eb.name) < 0)
 
 
 func _items() -> Array:
@@ -262,7 +339,13 @@ func _items() -> Array:
 	for path in keys:
 		var entry: Dictionary = library.games[path]
 		var icon := _icon_for(path, entry)
-		out.append({"path": path, "entry": entry, "icon": icon.texture, "color": icon.color, "art": arts.get(path)})
+		var shown := entry
+		if entry.get("favorite", false) or entry.get("hidden", false) or entry.has("update_available"):
+			shown = entry.duplicate() # the skins show the name with a marker
+			shown.name = ("★ " if entry.get("favorite", false) else "") + entry.name + (" (hidden)" if entry.get("hidden", false) else "") \
+				+ ("  ⬆ UPDATE" if entry.has("update_available") else "")
+		var color: Color = Color.from_string(entry.get("color", ""), icon.color) if entry.get("color", "") != "" else icon.color
+		out.append({"path": path, "entry": shown, "icon": icon.texture, "color": color, "art": arts.get(path)})
 	return out
 
 
@@ -312,7 +395,12 @@ func _load_art(path: String) -> void:
 	var entry: Dictionary = library.games.get(path, {})
 	var url: String = entry.get("gb", {}).get("art_url", "")
 	var tex: Texture2D = null
-	if url != "":
+	var cover: String = entry.get("cover", "")
+	if cover != "" and FileAccess.file_exists(cover):
+		var img := Image.load_from_file(cover)
+		if img:
+			tex = ImageTexture.create_from_image(img)
+	if tex == null and url != "":
 		tex = await gb.fetch_image(url)
 	if tex:
 		arts[path] = tex
@@ -344,7 +432,8 @@ func _input(event: InputEvent) -> void:
 
 
 func _process(delta: float) -> void:
-	if Cheats.active or viewer:
+	Stats.tick_music(delta, Music.player.playing and not Music.player.stream_paused)
+	if Cheats.active or viewer or theme_editor:
 		return
 	if not overlay and game_pid < 0 and not launching and not is_instance_valid(file_dialog):
 		idle_time += delta
@@ -418,7 +507,7 @@ func _process(delta: float) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if overlay or viewer or launching or _input_blocked():
+	if overlay or viewer or theme_editor or launching or _input_blocked():
 		return
 	var wheel := event as InputEventMouseButton
 	if wheel and wheel.pressed and wheel.button_index in [MOUSE_BUTTON_WHEEL_UP, MOUSE_BUTTON_WHEEL_DOWN]:
@@ -512,6 +601,119 @@ func _close_charts() -> void:
 	viewer = null
 	_play("cancel")
 	input_cooldown = 0.3
+
+
+# --- Custom themes --------------------------------------------------------------------
+
+## Example themes are copied into the themes folder once each: new ones arrive with
+## updates, and ones the player deleted stay deleted (remembered in settings).
+func _install_example_themes() -> void:
+	var dir := CustomTheme.themes_dir()
+	var seen: Array = library.settings.get("examples_seen", []).duplicate()
+	if seen.is_empty() and DirAccess.dir_exists_absolute(dir):
+		seen = ["midnight", "orang-juice"] # installed before this was tracked
+	for name in DirAccess.get_directories_at("res://themes_examples"):
+		if name in seen:
+			continue
+		seen.append(name)
+		var dest := dir.path_join(name)
+		DirAccess.make_dir_recursive_absolute(dest)
+		for f in DirAccess.get_files_at("res://themes_examples/" + name):
+			if f.ends_with(".import") or f.ends_with(".uid"):
+				continue
+			var out := FileAccess.open(dest.path_join(f), FileAccess.WRITE)
+			if out:
+				out.store_buffer(FileAccess.get_file_as_bytes("res://themes_examples/%s/%s" % [name, f]))
+	if seen != library.settings.get("examples_seen", []):
+		library.settings.examples_seen = seen
+		library.save()
+
+
+func _cycle_theme(step: int, label: Label) -> void:
+	var ids := [""]
+	for th in CustomTheme.list():
+		ids.append(th.id())
+	var i := ids.find(library.settings.get("theme", ""))
+	var next: String = ids[wrapi(i + step, 0, ids.size())]
+	library.settings.theme = next
+	library.settings.theme_mode = "manual" # picking one by hand
+	CustomTheme.reset_session(next)
+	library.save()
+	_apply_skin()
+	label.text = _theme_name()
+
+
+func _theme_name() -> String:
+	var th := CustomTheme.by_id(CustomTheme.session_id(library.settings))
+	return th.name().to_upper() if th else "NONE (SKIN ABOVE)"
+
+
+func _new_theme() -> void:
+	var th := CustomTheme.create("My Theme", active_theme.base() if active_theme else library.settings.skin, UiKit.accent)
+	library.settings.theme = th.id()
+	library.settings.theme_mode = "manual"
+	CustomTheme.reset_session(th.id())
+	library.save()
+	_close_overlay()
+	_apply_skin()
+	_open_theme_editor()
+
+
+func _open_theme_editor() -> void:
+	if android:
+		return
+	if active_theme == null:
+		_show_message("PICK A THEME FIRST, OR PRESS NEW")
+		return
+	_close_overlay()
+	Achievements.unlock("theme")
+	theme_editor = ThemeEditor.new().setup(self, active_theme)
+	theme_editor.closed.connect(_close_theme_editor)
+	add_child(theme_editor)
+
+
+func _close_theme_editor() -> void:
+	theme_editor.queue_free()
+	theme_editor = null
+	input_cooldown = 0.3
+	_apply_skin()
+
+
+func _export_theme() -> void:
+	if active_theme == null:
+		_show_message("NO THEME TO EXPORT")
+		return
+	_pick_file(false, PackedStringArray(["*.fnftheme"]), OS.get_environment("HOME"), func(path: String):
+		if path.get_extension() != "fnftheme":
+			path += ".fnftheme"
+		_show_message(("EXPORTED " + path.get_file().to_upper()) if active_theme.export_to(path) else "COULDN'T EXPORT THE THEME"),
+		active_theme.id() + ".fnftheme")
+
+
+func _import_theme(path: String) -> void:
+	var th := CustomTheme.import_from(path)
+	if th == null:
+		_show_message("THAT ISN'T A THEME FILE")
+		return
+	library.settings.theme = th.id()
+	library.settings.theme_mode = "manual"
+	CustomTheme.reset_session(th.id())
+	library.save()
+	if overlay:
+		_close_overlay()
+	_apply_skin()
+	_show_message("INSTALLED THE THEME: " + th.name().to_upper())
+
+
+## Files dropped on the window: into the theme editor if it's open; theme files install.
+func _on_files_dropped(files: PackedStringArray) -> void:
+	if theme_editor:
+		theme_editor.drop(files)
+		return
+	for f in files:
+		if f.get_extension().to_lower() == "fnftheme":
+			_import_theme(f)
+			return
 
 
 # --- Updates -------------------------------------------------------------------------
@@ -677,8 +879,33 @@ func _open_leaderboard() -> void:
 	if ranked.is_empty():
 		UiKit.add_label(list, "No games yet.", 22)
 	var bottom := UiKit.add_row(o.box)
+	UiKit.add_button(bottom, "PLAY MODE BESTS", _open_play_bests)
+	UiKit.add_button(bottom, "FUNKIN' WRAPPED", func():
+		_close_overlay()
+		Wrapped.open(self))
 	var close := UiKit.add_button(bottom, "CLOSE", _close_overlay)
 	o.focus_target = first if first else close
+	_open_overlay(o)
+
+
+## Your best runs in the chart viewer's play mode.
+func _open_play_bests() -> void:
+	var o := UiKit.make_overlay(self, "PLAY MODE BESTS", 900)
+	var list := _scroll_list(o.box)
+	var first: Button = null
+	var runs := PlayScores.runs()
+	for i in runs.size():
+		var r: Dictionary = runs[i]
+		var note := "%s · %s · %s SIDE · %.1fx · %.2f%%" % [r.rank, str(r.difficulty).to_upper(), "BF" if int(r.side) == 1 else "OPP", float(r.rate), float(r.accuracy)]
+		var b := _score_row(list, "#%d" % (i + 1), "%s (%s)" % [r.title, r.game], note, _commas(int(r.score)), Callable())
+		if first == null:
+			first = b
+	if runs.is_empty():
+		UiKit.add_label(list, "No runs yet. Find the secret play mode in the chart viewer first. (Hint: hold onto the music.)", 20)
+	var bottom := UiKit.add_row(o.box)
+	var back := UiKit.add_button(bottom, "BACK", _open_leaderboard)
+	UiKit.add_button(bottom, "CLOSE", _close_overlay)
+	o.focus_target = first if first else back
 	_open_overlay(o)
 
 
@@ -882,30 +1109,42 @@ func _open_edit(pending := {}) -> void:
 	var path: String = keys[selected]
 	var entry: Dictionary = library.games[path]
 	if pending.is_empty():
-		pending = {"name": entry.name, "exe": entry.exe, "icon": entry.icon_override, "gb": entry.get("gb", {})}
+		pending = {"name": entry.name, "exe": entry.exe, "icon": entry.icon_override, "gb": entry.get("gb", {}),
+			"favorite": entry.get("favorite", false), "hidden": entry.get("hidden", false), "args": entry.get("args", ""),
+			"cover": entry.get("cover", ""), "color": entry.get("color", ""), "options": entry.get("options", {}).duplicate()}
 	var o := UiKit.make_overlay(self, "EDIT GAME", 900)
-	UiKit.add_label(o.box, entry.get("package", path), 16, Color(0.7, 0.7, 0.7))
+	# Everything but SAVE / CANCEL scrolls, so it fits any screen.
+	var scroll := ScrollContainer.new()
+	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
+	scroll.follow_focus = true
+	scroll.custom_minimum_size = Vector2(0, minf(get_viewport_rect().size.y - 230.0, 600.0))
+	o.box.add_child(scroll)
+	var box := VBoxContainer.new()
+	box.size_flags_horizontal = SIZE_EXPAND_FILL
+	box.add_theme_constant_override("separation", 14)
+	scroll.add_child(box)
+	UiKit.add_label(box, entry.get("package", path), 16, Color(0.7, 0.7, 0.7))
 
-	UiKit.add_label(o.box, "NAME", 20, UiKit.accent)
+	UiKit.add_label(box, "NAME", 20, UiKit.accent)
 	var name_edit := LineEdit.new()
 	name_edit.text = pending.name
 	name_edit.select_all_on_focus = true
 	name_edit.text_changed.connect(func(text: String): pending.name = text)
-	o.box.add_child(name_edit)
+	box.add_child(name_edit)
 
-	var exe_label := UiKit.add_label(o.box, "EXECUTABLE", 20, UiKit.accent)
+	var exe_label := UiKit.add_label(box, "EXECUTABLE", 20, UiKit.accent)
 	var exe_pick := OptionButton.new()
 	var exes := Library.find_exes(path, true)
 	for exe in exes:
 		exe_pick.add_item(exe.trim_prefix(path + "/"))
 	exe_pick.select(maxi(exes.find(pending.exe), 0))
 	exe_pick.item_selected.connect(func(i: int): pending.exe = exes[i])
-	o.box.add_child(exe_pick)
+	box.add_child(exe_pick)
 	exe_label.visible = not android
 	exe_pick.visible = not android
 
-	var icon_label := UiKit.add_label(o.box, "ICON", 20, UiKit.accent)
-	var icon_row := UiKit.add_row(o.box)
+	var icon_label := UiKit.add_label(box, "ICON", 20, UiKit.accent)
+	var icon_row := UiKit.add_row(box)
 	icon_label.visible = not android
 	icon_row.visible = not android
 	icon_row.alignment = BoxContainer.ALIGNMENT_BEGIN
@@ -925,9 +1164,52 @@ func _open_edit(pending := {}) -> void:
 	UiKit.add_button(icon_row, "CHOOSE ICON...", func(): _pick_file(false, image_filter, path, set_icon))
 	UiKit.add_button(icon_row, "AUTO", set_icon.bind(""))
 
-	UiKit.add_label(o.box, "GAMEBANANA PAGE", 20, UiKit.accent)
-	var gb_label := UiKit.add_label(o.box, _gb_text(pending.gb), 18)
-	var gb_row := UiKit.add_row(o.box)
+	var flags := UiKit.add_row(box)
+	flags.alignment = BoxContainer.ALIGNMENT_BEGIN
+	var fav := CheckBox.new()
+	fav.text = "★ FAVORITE (pinned to the top)"
+	fav.button_pressed = pending.favorite
+	fav.toggled.connect(func(on: bool): pending.favorite = on)
+	flags.add_child(fav)
+	var hide_box := CheckBox.new()
+	hide_box.text = "HIDE FROM THE LIST"
+	hide_box.button_pressed = pending.hidden
+	hide_box.toggled.connect(func(on: bool): pending.hidden = on)
+	flags.add_child(hide_box)
+
+	if not android:
+		UiKit.add_label(box, "LAUNCH OPTIONS", 20, UiKit.accent)
+		var args_edit := LineEdit.new()
+		args_edit.text = pending.args
+		args_edit.placeholder_text = "extra arguments for the game, e.g. -fullscreen"
+		args_edit.text_changed.connect(func(t: String): pending.args = t)
+		box.add_child(args_edit)
+
+	UiKit.add_label(box, "COVER ART & COLOUR", 20, UiKit.accent)
+	var look := UiKit.add_row(box)
+	look.alignment = BoxContainer.ALIGNMENT_BEGIN
+	var cover_label := UiKit.add_label(look, pending.cover.get_file() if pending.cover != "" else "GameBanana art", 16)
+	cover_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	cover_label.custom_minimum_size.x = 200
+	var image_types := PackedStringArray(["*.png, *.jpg, *.jpeg, *.webp ; Images"])
+	UiKit.add_button(look, "CHOOSE COVER...", func(): _pick_file(false, image_types, path, func(f: String):
+		pending.cover = f
+		cover_label.text = f.get_file()))
+	UiKit.add_button(look, "USE GAMEBANANA ART", func():
+		pending.cover = ""
+		cover_label.text = "GameBanana art")
+	var tint := ColorPickerButton.new()
+	tint.custom_minimum_size = Vector2(70, 36)
+	tint.color = Color.from_string(pending.color, Color.WHITE) if pending.color != "" else Color.WHITE
+	tint.color_changed.connect(func(c: Color): pending.color = "#" + c.to_html(false))
+	look.add_child(tint)
+	UiKit.add_button(look, "AUTO COLOUR", func():
+		pending.color = ""
+		tint.color = Color.WHITE)
+
+	UiKit.add_label(box, "GAMEBANANA PAGE", 20, UiKit.accent)
+	var gb_label := UiKit.add_label(box, _gb_text(pending.gb), 18)
+	var gb_row := UiKit.add_row(box)
 	gb_row.alignment = BoxContainer.ALIGNMENT_BEGIN
 	UiKit.add_button(gb_row, "FIND ON GAMEBANANA...", _open_gb_picker.bind(pending))
 	var link := LineEdit.new()
@@ -940,14 +1222,19 @@ func _open_edit(pending := {}) -> void:
 		gb_label.text = _gb_text(pending.gb)
 	UiKit.add_button(gb_row, "CLEAR", clear_gb)
 
+	if not android:
+		ToolsUI.edit_sections(self, box, path, entry, pending)
+
 	var save := func() -> void:
 		var new_name: String = pending.name.strip_edges()
 		entry.name = new_name if new_name != "" else path.get_file()
 		if pending.exe != "":
 			entry.exe = pending.exe
 		entry.icon_override = pending.icon
-		var gb_changed: bool = entry.get("gb", {}) != pending.gb
+		var gb_changed: bool = entry.get("gb", {}) != pending.gb or entry.get("cover", "") != pending.cover
 		entry.gb = pending.gb
+		for k in ["favorite", "hidden", "args", "cover", "color", "options"]:
+			entry[k] = pending[k]
 		library.save()
 		Achievements.unlock("edit")
 		icons.erase(path)
@@ -963,6 +1250,9 @@ func _open_edit(pending := {}) -> void:
 	UiKit.add_button(buttons, "CANCEL", _close_overlay)
 	o.focus_target = name_edit
 	_open_overlay(o)
+	# Start at the top (follow_focus can jump to a section further down).
+	get_tree().process_frame.connect(func(): scroll.scroll_vertical = 0, CONNECT_ONE_SHOT)
+	get_tree().create_timer(0.1).timeout.connect(func(): if is_instance_valid(scroll): scroll.scroll_vertical = 0)
 
 
 func _gb_text(info: Dictionary) -> String:
@@ -1075,6 +1365,26 @@ func _open_settings() -> void:
 	skin_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	UiKit.add_button(row, " > ", _cycle_skin.bind(1))
 
+	UiKit.add_label(box, "THEME", 20, UiKit.accent)
+	row = UiKit.add_row(box)
+	var theme_label := UiKit.add_label(row, "", 22)
+	UiKit.add_button(row, " < ", func(): _cycle_theme(-1, theme_label))
+	row.move_child(theme_label, -1)
+	theme_label.text = _theme_name()
+	theme_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	theme_label.custom_minimum_size = Vector2(300, 0)
+	theme_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UiKit.add_button(row, " > ", func(): _cycle_theme(1, theme_label))
+	if not android:
+		row = UiKit.add_row(box)
+		UiKit.add_button(row, "NEW", _new_theme)
+		UiKit.add_button(row, "EDIT", _open_theme_editor)
+		UiKit.add_button(row, "IMPORT", func(): _pick_file(false, PackedStringArray(["*.fnftheme"]), OS.get_environment("HOME"), _import_theme))
+		UiKit.add_button(row, "EXPORT", _export_theme)
+		UiKit.add_button(row, "OPEN FOLDER", func():
+			DirAccess.make_dir_recursive_absolute(CustomTheme.themes_dir())
+			OS.shell_open(CustomTheme.themes_dir()))
+
 	if not android:
 		UiKit.add_label(box, "UPDATES", 20, UiKit.accent)
 		var urow := UiKit.add_row(box)
@@ -1093,6 +1403,74 @@ func _open_settings() -> void:
 		channel_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 		UiKit.add_button(urow, " > ", cycle_channel.bind(1))
 		UiKit.add_button(urow, "CHECK NOW", _check_updates_now)
+
+	if not android:
+		ToolsUI.settings_sections(self, box)
+
+	UiKit.add_label(box, "THEME MODE", 20, UiKit.accent)
+	row = UiKit.add_row(box)
+	var mode_label := UiKit.add_label(row, "", 22)
+	var cycle_mode := func(step: int) -> void:
+		var modes: Array = CustomTheme.MODES
+		var cur: String = library.settings.get("theme_mode", "manual")
+		library.settings.theme_mode = modes[wrapi(modes.find(cur) + step, 0, modes.size())]
+		library.save()
+		CustomTheme.reset_session()
+		_apply_skin()
+		mode_label.text = CustomTheme.MODE_NAMES[library.settings.theme_mode]
+		theme_label.text = _theme_name()
+	UiKit.add_button(row, " < ", cycle_mode.bind(-1))
+	row.move_child(mode_label, -1)
+	mode_label.text = CustomTheme.MODE_NAMES.get(library.settings.get("theme_mode", "manual"), "PICK MYSELF")
+	mode_label.autowrap_mode = TextServer.AUTOWRAP_OFF
+	mode_label.custom_minimum_size = Vector2(300, 0)
+	mode_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UiKit.add_button(row, " > ", cycle_mode.bind(1))
+	UiKit.add_label(box, "Seasonal picks themes with a \"season:\" line for this month.", 15, Color(1, 1, 1, 0.6))
+
+	UiKit.add_label(box, "UI SIZE", 20, UiKit.accent)
+	row = UiKit.add_row(box)
+	var size_label := UiKit.add_label(row, "", 22)
+	var sizes := [80, 90, 100, 110, 125, 150]
+	var cycle_size := func(step: int) -> void:
+		var cur: int = library.settings.get("ui_scale", 100)
+		library.settings.ui_scale = sizes[clampi(maxi(sizes.find(cur), 2) + step, 0, sizes.size() - 1)]
+		library.save()
+		ThemeRuntime._apply_scale(active_theme, self)
+		size_label.text = "%d%%" % library.settings.ui_scale
+	UiKit.add_button(row, " < ", cycle_size.bind(-1))
+	row.move_child(size_label, -1)
+	size_label.text = "%d%%" % library.settings.get("ui_scale", 100)
+	size_label.custom_minimum_size = Vector2(120, 0)
+	size_label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	UiKit.add_button(row, " > ", cycle_size.bind(1))
+
+	UiKit.add_label(box, "GAME LIST", 20, UiKit.accent)
+	row = UiKit.add_row(box)
+	var sort_names := {"name": "SORT: NAME", "recent": "SORT: RECENTLY PLAYED", "played": "SORT: MOST PLAYED"}
+	var sort_button := UiKit.add_button(row, sort_names.get(library.settings.get("sort", "name"), "SORT: NAME"), func(): pass)
+	sort_button.pressed.connect(func():
+		var order := ["name", "recent", "played"]
+		library.settings.sort = order[wrapi(order.find(library.settings.get("sort", "name")) + 1, 0, order.size())]
+		library.save()
+		sort_button.text = sort_names[library.settings.sort]
+		_apply_skin())
+	var hidden_toggle := CheckButton.new()
+	hidden_toggle.text = "SHOW HIDDEN MODS"
+	hidden_toggle.button_pressed = library.settings.get("show_hidden", false)
+	hidden_toggle.toggled.connect(func(on: bool):
+		library.settings.show_hidden = on
+		library.save()
+		_apply_skin())
+	row.add_child(hidden_toggle)
+	var seasonal := CheckButton.new()
+	seasonal.text = "SEASONAL EXTRAS (snow in December...)"
+	seasonal.button_pressed = library.settings.get("seasonal_extras", true)
+	seasonal.toggled.connect(func(on: bool):
+		library.settings.seasonal_extras = on
+		library.save()
+		_apply_skin())
+	box.add_child(seasonal)
 
 	UiKit.add_label(box, "ACHIEVEMENT SOUND", 20, UiKit.accent)
 	row = UiKit.add_row(box)
@@ -1171,6 +1549,34 @@ func _open_android_settings() -> void:
 	UiKit.add_button(row, "CLOSE", _close_overlay)
 	UiKit.add_button(row, "QUIT", get_tree().quit)
 	_open_overlay(o)
+
+
+## The Proton a mod launches with: its own PROTON setting, or the newest GE-Proton.
+func _proton_for(entry: Dictionary) -> String:
+	var own: String = entry.get("options", {}).get("proton", "")
+	if own != "" and FileAccess.file_exists(own.path_join("proton")):
+		return own
+	return Proton.find_ge_proton()
+
+
+func _on_mod_updates_checked(count: int) -> void:
+	_apply_skin(keys[selected] if selected < keys.size() else "")
+	if count > 0:
+		_show_message("%d MOD UPDATE%s ON GAMEBANANA - EDIT (F2) TO INSTALL" % [count, "" if count == 1 else "S"], 6.0)
+
+
+## Replaces an installed mod with its newest GameBanana download.
+func _update_mod(path: String) -> void:
+	var entry: Dictionary = library.games.get(path, {})
+	var url: String = entry.get("gb", {}).get("url", "")
+	if url == "":
+		return
+	if game_pid > 0 and playing_path == path:
+		_show_message("CLOSE THE GAME FIRST")
+		return
+	downloader.add_url(url, path)
+	_close_overlay()
+	_show_message("UPDATING %s - SEE DOWNLOADS (F4)" % entry.name.to_upper(), 5.0)
 
 
 func _rescan_from_settings() -> void:
@@ -1291,6 +1697,8 @@ func _rescan(installed := "", gb_info := {}, source := "") -> void:
 	if installed != "" and library.games.has(installed):
 		if not gb_info.is_empty():
 			library.games[installed].gb = gb_info
+			if gb_info.has("file_date"):
+				ModUpdates.mark_updated(library.games[installed], int(gb_info.file_date))
 		if source != "":
 			library.games[installed].source = source
 		library.save()
@@ -1313,7 +1721,7 @@ func _launch_selected() -> void:
 		_play("confirm")
 		view.play_launch(selected, _start_android_app.bind(app))
 		return
-	proton_dir = Proton.find_ge_proton()
+	proton_dir = _proton_for(library.games[keys[selected]])
 	if not Proton.can_launch(proton_dir):
 		_play("cancel")
 		_show_proton_popup()
@@ -1332,11 +1740,21 @@ func _launch_selected() -> void:
 func _start_game(entry: Dictionary) -> void:
 	launching = false
 	var log_path := ProjectSettings.globalize_path("user://logs/%s.log" % entry.slug)
-	var pid := Proton.launch(entry.exe, entry.prefix, proton_dir, log_path)
+	# Saves are backed up first, then get the global keybinds (if they're on).
+	ModSaves.backup(entry, "before playing")
+	if Keybinds.enabled(library.settings):
+		Keybinds.apply(entry, Keybinds.keys_from(library.settings))
+	_save_snapshot = ModSaves.snapshot()
+	_session_start = int(Time.get_unix_time_from_system())
+	var pid := Proton.launch(entry.exe, entry.prefix, proton_dir, log_path, Proton.split_args(entry.get("args", "")), entry.get("options", {}))
 	if pid <= 0:
 		_show_message("FAILED TO START THE GAME")
 		return
 	game_pid = pid
+	playing_path = keys[selected] if selected < keys.size() else ""
+	entry.plays = int(entry.get("plays", 0)) + 1
+	entry.last_played = int(Time.get_unix_time_from_system())
+	library.save()
 	Achievements.launched_game()
 	Music.set_game_running(true)
 	message_label.text = "NOW PLAYING: %s" % entry.name.to_upper()
@@ -1369,6 +1787,12 @@ func _check_game() -> void:
 	game_pid = -1
 	run_timer.stop()
 	Music.set_game_running(false)
+	if library.games.has(playing_path):
+		var played: Dictionary = library.games[playing_path]
+		Stats.add_session(played, _session_start, int(Time.get_unix_time_from_system()) - _session_start)
+		if ModSaves.learn(played, _save_snapshot):
+			library.save()
+	playing_path = ""
 	# Ask to come back to the front so the controller works again right away.
 	get_window().move_to_foreground()
 	get_window().grab_focus()
@@ -1538,9 +1962,11 @@ func _job_status(job: Dictionary) -> String:
 
 func _on_game_installed(game_path: String, gb_info: Dictionary, source: String) -> void:
 	_play("confirm")
-	Achievements.unlock("download")
+	var was_update: bool = gb_info.get("was_update", false)
+	gb_info.erase("was_update")
+	Achievements.unlock("mod_update" if was_update else "download")
 	_rescan(game_path, gb_info, source)
-	_show_message("INSTALLED " + game_path.get_file().to_upper(), 6.0)
+	_show_message(("UPDATED " if was_update else "INSTALLED ") + game_path.get_file().to_upper(), 6.0)
 
 
 func _export_collection(path: String) -> void:
